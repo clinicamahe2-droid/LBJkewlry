@@ -1,0 +1,20 @@
+{
+  "name": "lb-jewelry",
+  "private": true,
+  "version": "1.0.0",
+  "description": "LB jewelry store and admin",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "multer": "^2.3.0"
+  }
+}

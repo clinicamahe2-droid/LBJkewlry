@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel | LB jewelry</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div id="login-view" class="login-wrap">
+    <form id="login-form" class="login-card">
+      <p class="login-brand">LB jewelry</p>
+      <h1>Acesso do administrador</h1>
+      <p class="login-copy">Abra exatamente este endereço: http://localhost:3480/admin</p>
+      <label>
+        Usuário
+        <input type="text" name="user" autocomplete="username" required>
+      </label>
+      <label>
+        Senha
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p id="login-error" class="form-error" hidden></p>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="app-view" hidden>
+    <header class="admin-header">
+      <div>
+        <p class="login-brand">LB jewelry</p>
+        <strong>Painel</strong>
+      </div>
+      <nav class="admin-tabs">
+        <button type="button" data-tab="products" class="is-active">Produtos</button>
+        <button type="button" data-tab="stock">Estoque</button>
+        <button type="button" data-tab="sales">Vendas</button>
+        <button type="button" data-tab="banners">Banner</button>
+      </nav>
+      <div class="admin-actions">
+        <a href="/" target="_blank" rel="noopener">Ver loja</a>
+        <button id="logout-btn" type="button">Sair</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <section id="tab-products" class="tab-panel">
+        <div class="panel-head">
+          <h2>Catálogo</h2>
+          <button id="new-product-btn" type="button">Novo produto</button>
+        </div>
+        <div class="ops-toolbar">
+          <input id="product-search" type="search" placeholder="Buscar peça, coleção ou categoria" autocomplete="off">
+          <div class="filter-chips" id="product-filters" role="group" aria-label="Filtrar produtos por categoria"></div>
+        </div>
+        <p id="product-result-meta" class="result-meta"></p>
+        <div id="product-list"></div>
+      </section>
+
+      <section id="tab-stock" class="tab-panel" hidden>
+        <div class="panel-head">
+          <h2>Estoque</h2>
+          <button id="new-product-stock-btn" type="button">Novo produto</button>
+        </div>
+        <p class="panel-hint">Filtre a categoria, busque a peça e reponha com a quantidade na linha.</p>
+        <div class="ops-toolbar">
+          <input id="stock-search" type="search" placeholder="Buscar peça para repor estoque" autocomplete="off">
+          <div class="filter-chips" id="stock-filters" role="group" aria-label="Filtrar estoque por categoria"></div>
+        </div>
+        <div id="stock-summary" class="stats-grid"></div>
+        <p id="stock-result-meta" class="result-meta"></p>
+        <div id="stock-list"></div>
+      </section>
+
+      <section id="tab-sales" class="tab-panel" hidden>
+        <div class="panel-head">
+          <h2>Vendas</h2>
+        </div>
+        <div class="ops-toolbar">
+          <div class="filter-chips" id="sales-period-filters" role="group" aria-label="Filtrar período"></div>
+          <div class="filter-chips" id="sales-category-filters" role="group" aria-label="Filtrar categoria"></div>
+        </div>
+        <div id="sales-summary" class="stats-grid"></div>
+        <p id="sales-result-meta" class="result-meta"></p>
+        <div class="charts-grid">
+          <article class="chart-card">
+            <h3>Faturamento</h3>
+            <div id="chart-months"></div>
+          </article>
+          <article class="chart-card">
+            <h3>Por categoria</h3>
+            <div id="chart-categories"></div>
+          </article>
+        </div>
+        <form id="sale-form" class="sale-form">
+          <label>Categoria
+            <select id="sale-category">
+              <option value="all">Todas</option>
+              <option value="correntes">Correntes</option>
+              <option value="brincos">Brincos</option>
+              <option value="pulseiras">Pulseiras</option>
+              <option value="aneis">Anéis</option>
+            </select>
+          </label>
+          <label>Produto
+            <select name="productId" required></select>
+          </label>
+          <label>Quantidade
+            <input type="number" name="quantity" min="1" step="1" value="1" required>
+          </label>
+          <label>Valor unitário
+            <input type="number" name="unitPrice" min="0" step="0.01" required>
+          </label>
+          <button type="button" id="register-sale-btn" class="primary">Registrar venda</button>
+        </form>
+        <p id="sale-error" class="form-error" hidden></p>
+        <div id="sales-list" class="table-wrap"></div>
+      </section>
+
+      <section id="tab-banners" class="tab-panel" hidden>
+        <div class="panel-head">
+          <h2>Banner de entrada</h2>
+          <button id="add-banner-btn" type="button">Adicionar slide</button>
+        </div>
+        <p class="panel-hint">Envie a foto ou o vídeo do slide e clique em Salvar banners. Trocar o arquivo substitui o que está na home.</p>
+        <p id="banner-error" class="form-error" hidden></p>
+        <p id="banner-ok" class="form-ok" hidden></p>
+        <div id="banner-list"></div>
+        <button id="save-banners-btn" type="button" class="primary">Salvar banners</button>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="product-dialog">
+    <form id="product-form" method="dialog">
+      <h2 id="product-dialog-title">Produto</h2>
+      <input type="hidden" name="id">
+      <p class="form-section">Exposição na home</p>
+      <div class="form-row">
+        <label>Estoque inicial<input type="number" name="stock" min="0" step="1" value="1" required></label>
+        <label class="check-label">Página principal
+          <span>
+            <input type="checkbox" name="showOnHome" checked>
+            Subir para a home
+          </span>
+        </label>
+        <label>Selo na vitrine
+          <select name="badge">
+            <option value="">Nenhum</option>
+            <option value="new">Lançamento</option>
+            <option value="sale">Sale</option>
+          </select>
+        </label>
+      </div>
+      <p class="form-section">Identificação</p>
+      <label>Nome da peça<input type="text" name="name" required placeholder="Ex.: Corrente Veneziana em Ouro 18k, 45cm"></label>
+      <div class="form-row">
+        <label>Categoria
+          <select name="categorySlug" required>
+            <option value="correntes">Correntes</option>
+            <option value="brincos">Brincos</option>
+            <option value="pulseiras">Pulseiras</option>
+            <option value="aneis">Anéis</option>
+          </select>
+        </label>
+        <label>Coleção<input type="text" name="collection" placeholder="Ex.: Coleção Veneziana"></label>
+      </div>
+      <p class="form-section">Valores</p>
+      <div class="form-row">
+        <label>Preço mínimo<input type="number" name="priceMin" min="0" step="0.01" required></label>
+        <label>Preço máximo<input type="number" name="priceMax" min="0" step="0.01" required></label>
+        <label>Preço riscado (opcional)<input type="number" name="priceList" min="0" step="0.01"></label>
+      </div>
+      <p class="form-section">Fotos da vitrine</p>
+      <p class="panel-hint">A primeira foto é a da home. Envie mais de uma para a página do produto.</p>
+      <div id="product-previews" class="photo-grid"></div>
+      <label class="file-label">
+        Enviar fotos
+        <input type="file" id="product-files" accept="image/jpeg,image/png,image/webp" multiple>
+      </label>
+      <input type="hidden" name="image">
+      <p class="form-section">Especificações</p>
+      <label>Variantes (separadas por vírgula)<input type="text" name="variants" placeholder="0.95, 1.10, 1.30"></label>
+      <label>Descrição<textarea name="description" rows="3" placeholder="Texto que aparece nos detalhes da peça"></textarea></label>
+      <label>Detalhes (um por linha)<textarea name="detailsText" rows="4" placeholder="Material: Ouro 18k"></textarea></label>
+      <p id="product-error" class="form-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-product">Cancelar</button>
+        <button type="submit" class="primary">Salvar produto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+node_modules/
+.env
+*.log
+.DS_Store
+Thumbs.db
+.vercel
+
+# runtime / secrets
+server/data/admin.json
+server/data/.admin-credentials.txt
+server/data/catalog.json
+server/data/*.tmp
+
+# scrapes at the repo root (not the store)
+/luxuryds/
+/assets/
+/assets vivara/
+/vivara interno/
+/vivara.html
+/vivara interto2.html
+/DSlux.html
+/extract.py
+/index.html
+
+# scrape junk inside the store media folder
+site/assets/*.html
+site/assets/*.js
+site/assets/*.json
+site/assets/*.css
+site/assets/*.gif
+site/assets/*.woff2
+site/assets/*.svg
+site/assets/*.tpmn
+site/assets/*.aspx
+site/assets/*.htm
+site/assets/*.ip
