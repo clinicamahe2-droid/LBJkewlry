@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260911b">
+  <link rel="stylesheet" href="admin.css?v=20260911f">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -34,11 +34,17 @@
 
   <div id="app-view" hidden>
     <header class="admin-header">
-      <div>
-        <p class="login-brand">LB jewelry</p>
-        <strong>Painel</strong>
+      <div class="admin-header-bar">
+        <div class="admin-brand-block">
+          <p class="login-brand">LB jewelry</p>
+          <strong>Painel</strong>
+        </div>
+        <div class="admin-actions">
+          <a href="/" target="_blank" rel="noopener">Ver loja</a>
+          <button id="logout-btn" type="button">Sair</button>
+        </div>
       </div>
-      <nav class="admin-tabs">
+      <nav class="admin-tabs" aria-label="Seções do painel">
         <button type="button" data-tab="products" class="is-active">Produtos</button>
         <button type="button" data-tab="stock">Estoque</button>
         <button type="button" data-tab="sales">Vendas</button>
@@ -51,10 +57,6 @@
         </button>
         <button type="button" data-tab="banners">Banner</button>
       </nav>
-      <div class="admin-actions">
-        <a href="/" target="_blank" rel="noopener">Ver loja</a>
-        <button id="logout-btn" type="button">Sair</button>
-      </div>
     </header>
 
     <main class="admin-main">
@@ -193,6 +195,7 @@
             <h3>Acompanhamento</h3>
             <div class="filter-chips" id="fiado-status-filters" role="group" aria-label="Filtrar fiado"></div>
           </div>
+          <div id="fiado-alerts" class="fiado-alerts" aria-live="polite"></div>
           <div id="fiado-list" class="item-list"></div>
       </section>
 
@@ -301,6 +304,6 @@
     </form>
   </dialog>
 
-  <script src="admin.js?v=20260911c"></script>
+  <script src="admin.js?v=20260911f"></script>
 </body>
 </html>

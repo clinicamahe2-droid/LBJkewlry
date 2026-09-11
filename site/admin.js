@@ -74,6 +74,170 @@ function formatDate(value) {
   return date.toLocaleDateString("pt-BR");
 }
 
+function formatShortDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("pt-BR");
+}
+
+function phoneDigits(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function whatsAppLink(phone, message) {
+  const digits = phoneDigits(phone);
+  if (!digits) return "";
+  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+}
+
+function fiadoCollectMessage(entry) {
+  const lines = [
+    `Olá ${entry.clientName}, tudo bem?`,
+    "Passando para lembrar do seu fiado na LB jewelry.",
+    `Produto: ${entry.productName}`,
+    `Saldo em aberto: ${money(entry.balance)}`
+  ];
+  if (entry.nextDueDate) lines.push(`Vencimento: ${formatDate(entry.nextDueDate)}`);
+  if (entry.installmentAmount) lines.push(`Parcela: ${money(entry.installmentAmount)}`);
+  lines.push("Podemos combinar o pagamento?");
+  return lines.join("\n");
+}
+
+function renderWhatsAppButton(entry, extraClass = "") {
+  const href = whatsAppLink(entry.clientPhone, fiadoCollectMessage(entry));
+  if (!href) return "";
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn ${extraClass}">WhatsApp</a>`;
+}
+
+function isDueSoon(entry) {
+  if (!entry.nextDueDate || entry.status === "paid" || entry.status === "overdue") return false;
+  const due = new Date(`${entry.nextDueDate}T12:00:00`);
+  const limit = new Date();
+  limit.setDate(limit.getDate() + 7);
+  return due <= limit;
+}
+
+function getCollectionAlerts() {
+  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
+  return {
+    overdue: openItems.filter((item) => item.status === "overdue"),
+    dueSoon: openItems.filter(isDueSoon)
+  };
+}
+
+function renderAlertItem(entry, tone) {
+  return `
+    <li class="fiado-alert-item is-${tone}">
+      <div class="fiado-alert-copy">
+        <strong>${text(entry.clientName)}</strong>
+        <span>${text(entry.productName)}</span>
+        <span class="fiado-alert-balance">Saldo ${money(entry.balance)} · Venc. ${formatDate(entry.nextDueDate)}</span>
+      </div>
+      <div class="fiado-alert-actions">
+        ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar</button>` : ""}
+        ${renderWhatsAppButton(entry, "whatsapp-btn--compact")}
+      </div>
+    </li>`;
+}
+
+function renderFiadoAlerts() {
+  const container = document.getElementById("fiado-alerts");
+  if (!container) return;
+  const { overdue, dueSoon } = getCollectionAlerts();
+
+  if (!overdue.length && !dueSoon.length) {
+    container.innerHTML = `<p class="fiado-alert fiado-alert--ok">Nenhuma cobrança urgente no momento.</p>`;
+    return;
+  }
+
+  container.innerHTML = [
+    overdue.length ? `
+      <section class="fiado-alert fiado-alert--overdue">
+        <header>Cobrar agora · ${overdue.length} vencido${overdue.length === 1 ? "" : "s"}</header>
+        <ul class="fiado-alert-list">${overdue.map((entry) => renderAlertItem(entry, "overdue")).join("")}</ul>
+      </section>` : "",
+    dueSoon.length ? `
+      <section class="fiado-alert fiado-alert--due-soon">
+        <header>Vence em até 7 dias · ${dueSoon.length}</header>
+        <ul class="fiado-alert-list">${dueSoon.map((entry) => renderAlertItem(entry, "due-soon")).join("")}</ul>
+      </section>` : ""
+  ].join("");
+}
+
+function openClientById(clientId) {
+  if (!clientId) return;
+  openClient(catalog.clients.find((item) => item.id === clientId));
+}
+
+function renderFiadoPayments(payments) {
+  if (!payments?.length) return "";
+  const items = [...payments].reverse().map((pay) => `
+    <li>
+      <span>${formatDate(pay.paidAt)}</span>
+      <strong>${money(pay.amount)}</strong>
+      ${pay.note ? `<em>${text(pay.note)}</em>` : ""}
+    </li>
+  `).join("");
+  return `
+    <details class="fiado-payments"${payments.length <= 2 ? " open" : ""}>
+      <summary>Abatimentos (${payments.length})</summary>
+      <ul>${items}</ul>
+    </details>`;
+}
+
+function renderFiadoCard(entry) {
+  const payments = entry.payments || [];
+  return `
+    <article class="item-card fiado-card is-${text(entry.status)}">
+      <div class="fiado-card-main">
+        <header class="fiado-card-head">
+          <span class="fiado-badge is-${text(entry.status)}">${fiadoStatusLabel(entry.status)}</span>
+          ${entry.createdAt ? `<time class="fiado-card-date">${formatShortDate(entry.createdAt)}</time>` : ""}
+        </header>
+        <div class="fiado-card-info">
+          <div class="fiado-card-block">
+            <span class="fiado-card-label">Cliente</span>
+            <strong>${text(entry.clientName)}</strong>
+            ${entry.clientPhone ? `<span class="fiado-card-sub">${text(entry.clientPhone)}</span>` : ""}
+          </div>
+          <div class="fiado-card-block">
+            <span class="fiado-card-label">Produto</span>
+            <p>${text(entry.productName)}</p>
+            <span class="fiado-card-sub">${entry.quantity} un. · Total ${money(entry.total)}</span>
+          </div>
+        </div>
+        <dl class="fiado-financials">
+          <div>
+            <dt>Pago</dt>
+            <dd>${money(entry.paid)}</dd>
+          </div>
+          <div>
+            <dt>Saldo</dt>
+            <dd class="is-balance">${money(entry.balance)}</dd>
+          </div>
+          <div>
+            <dt>Próximo venc.</dt>
+            <dd>${formatDate(entry.nextDueDate)}</dd>
+          </div>
+          ${entry.installmentAmount ? `
+          <div>
+            <dt>Parcela</dt>
+            <dd>${money(entry.installmentAmount)}</dd>
+          </div>` : ""}
+        </dl>
+        ${entry.notes ? `<p class="fiado-notes">${text(entry.notes)}</p>` : ""}
+        ${renderFiadoPayments(payments)}
+      </div>
+      <div class="fiado-actions">
+        ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar cliente</button>` : ""}
+        ${entry.status !== "paid" ? renderWhatsAppButton(entry) : ""}
+        ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
+      </div>
+    </article>`;
+}
+
 function isCashSale(sale) {
   return !sale.type || sale.type === "cash" || sale.type === "fiado_payment";
 }
@@ -565,7 +729,7 @@ function renderFiadoFilters() {
     { id: "paid", label: "Quitados" }
   ];
   document.getElementById("fiado-status-filters").innerHTML = filters.map((item) => `
-    <button type="button" data-fiado-status="${item.id}" class="${fiadoFilter.status === item.id ? "is-active" : ""}">${item.label}</button>
+    <button type="button" data-fiado-status="${item.id}" class="fiado-filter ${fiadoFilter.status === item.id ? "is-active" : ""}">${item.label}</button>
   `).join("");
 }
 
@@ -587,10 +751,10 @@ function renderFiado() {
   }, 0);
 
   document.getElementById("fiado-summary").innerHTML = `
-    <div class="stat-card"><span>A receber</span><strong>${money(receivable)}</strong></div>
-    <div class="stat-card"><span>Vencidos</span><strong>${overdueItems.length}</strong></div>
-    <div class="stat-card"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></div>
-    <div class="stat-card"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></div>
+    <div class="stat-card stat-card--receivable"><span>A receber</span><strong>${money(receivable)}</strong></div>
+    <div class="stat-card stat-card--overdue"><span>Vencidos</span><strong>${overdueItems.length}</strong></div>
+    <div class="stat-card stat-card--due-soon"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></div>
+    <div class="stat-card stat-card--received"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></div>
   `;
 
   renderFiadoFilters();
@@ -603,29 +767,11 @@ function renderFiado() {
     ? `${rows.length} fiado${rows.length === 1 ? "" : "s"} nesta visão`
     : "Nenhum fiado nesta visão.";
 
-  document.getElementById("fiado-list").innerHTML = rows.length ? rows.map((entry) => `
-    <article class="item-card fiado-card">
-      <div class="item-card-body">
-        <span class="fiado-badge is-${text(entry.status)}">${fiadoStatusLabel(entry.status)}</span>
-        <h4>${text(entry.clientName)} · ${text(entry.productName)}</h4>
-        <p>${entry.quantity} un. · Total ${money(entry.total)}</p>
-        <div class="fiado-meta">
-          <span>Pago: ${money(entry.paid)}</span>
-          <span>Saldo: ${money(entry.balance)}</span>
-          <span>Próximo: ${formatDate(entry.nextDueDate)}</span>
-          ${entry.installmentAmount ? `<span>Parcela: ${money(entry.installmentAmount)}</span>` : ""}
-        </div>
-        ${entry.notes ? `<p class="payment-history">${text(entry.notes)}</p>` : ""}
-        ${entry.payments?.length ? `
-          <p class="payment-history">
-            ${entry.payments.slice(-3).map((pay) => `${formatDate(pay.paidAt)} · ${money(pay.amount)}${pay.note ? ` (${text(pay.note)})` : ""}`).join(" · ")}
-          </p>` : ""}
-      </div>
-      <div class="fiado-actions">
-        ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
-      </div>
-    </article>
-  `).join("") : "<p class='panel-hint'>Nenhum fiado registrado ainda.</p>";
+  renderFiadoAlerts();
+
+  document.getElementById("fiado-list").innerHTML = rows.length
+    ? rows.map((entry) => renderFiadoCard(entry)).join("")
+    : "<p class='panel-hint'>Nenhum fiado registrado ainda.</p>";
 }
 
 function openClient(client) {
@@ -646,8 +792,13 @@ function openPayment(entry) {
   showError(document.getElementById("payment-error"), "");
   form.elements.fiadoId.value = entry.id;
   form.elements.nextDueDate.value = entry.nextDueDate || "";
-  document.getElementById("payment-summary").textContent =
-    `${entry.clientName} · ${entry.productName} · Saldo ${money(entry.balance)}`;
+  document.getElementById("payment-summary").innerHTML = `
+    <span class="payment-summary-label">Cliente</span>
+    <strong>${text(entry.clientName)}</strong>
+    <span class="payment-summary-label">Produto</span>
+    <span>${text(entry.productName)}</span>
+    <span class="payment-summary-label">Saldo atual</span>
+    <strong class="payment-summary-balance">${money(entry.balance)}</strong>`;
   document.getElementById("payment-dialog").showModal();
 }
 
@@ -838,10 +989,10 @@ document.getElementById("client-search").addEventListener("input", (event) => {
 });
 
 document.getElementById("client-list").addEventListener("click", async (event) => {
-  const editId = event.target.dataset.editClient;
-  const deleteId = event.target.dataset.deleteClient;
+  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
+  const deleteId = event.target.closest("[data-delete-client]")?.dataset.deleteClient;
   if (editId) {
-    openClient(catalog.clients.find((item) => item.id === editId));
+    openClientById(editId);
   }
   if (deleteId && window.confirm("Excluir este cliente?")) {
     await request(`/api/admin/clients/${deleteId}`, { method: "DELETE" });
@@ -922,8 +1073,20 @@ document.getElementById("fiado-status-filters").addEventListener("click", (event
   renderFiado();
 });
 
+document.getElementById("fiado-alerts").addEventListener("click", (event) => {
+  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
+  if (editId) {
+    openClientById(editId);
+  }
+});
+
 document.getElementById("fiado-list").addEventListener("click", (event) => {
-  const fiadoId = event.target.dataset.payFiado;
+  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
+  if (editId) {
+    openClientById(editId);
+    return;
+  }
+  const fiadoId = event.target.closest("[data-pay-fiado]")?.dataset.payFiado;
   if (!fiadoId) return;
   const entry = catalog.fiado.find((item) => item.id === fiadoId);
   if (entry) openPayment(entry);
