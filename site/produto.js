@@ -81,7 +81,7 @@
             </div>
 
             <button class="pdp-size-guide" type="button">Guia de tamanhos</button>
-            <a class="pdp-add-cart" href="index.html#${escapeHtml(product.categorySlug)}">VER MAIS</a>
+            <a class="pdp-add-cart" href="${STORE_WHATSAPP_URL}" target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
 
             <div class="pdp-accordions">
               <details class="pdp-accordion" open>

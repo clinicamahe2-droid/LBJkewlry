@@ -1,3 +1,5 @@
+const STORE_WHATSAPP_URL = "https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es.";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")

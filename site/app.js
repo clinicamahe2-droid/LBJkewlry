@@ -170,18 +170,6 @@ function setupChainSlider() {
 const PROMO_STORAGE_KEY = "lb_promo_coupon";
 const PROMO_DISMISS_KEY = "lb_promo_closed";
 
-function phoneDigits(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
-
-function sellerWhatsAppLink(phone, name, couponCode) {
-  const digits = phoneDigits(phone);
-  if (!digits) return "";
-  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
-  const message = `Olá! Me chamo ${name}. Ganhei o cupom ${couponCode} no site LB jewelry e gostaria do desconto.`;
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
-}
-
 function promoImageSrc(src) {
   if (!src) return "/assets/promo-coupon-setembro.jpg";
   if (/^https?:\/\//i.test(src) || src.startsWith("/")) return src;
@@ -221,7 +209,7 @@ function showPromoCouponStep(data, name) {
   document.getElementById("promo-coupon-instruction").textContent = data.instruction
     || "Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto.";
   const waLink = document.getElementById("promo-seller-whatsapp");
-  waLink.href = sellerWhatsAppLink(data.sellerPhone, name, data.couponCode);
+  waLink.href = STORE_WHATSAPP_URL;
   localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({
     couponCode: data.couponCode,
     name,

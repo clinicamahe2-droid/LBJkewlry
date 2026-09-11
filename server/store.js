@@ -80,7 +80,7 @@ function defaultPromoPopup() {
     enabled: true,
     image: "/assets/promo-coupon-setembro.jpg",
     couponCode: "SETEMBRO10",
-    sellerPhone: "08007708540",
+    sellerPhone: "48996363634",
     headline: "Ganhe seu cupom de desconto",
     instruction: "Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto."
   };

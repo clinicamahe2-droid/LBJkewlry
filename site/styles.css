@@ -1985,3 +1985,31 @@ body.promo-open {
   text-transform: uppercase;
   text-decoration: none;
 }
+
+.whatsapp-float {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  z-index: 150;
+  width: 3.6rem;
+  height: 3.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.whatsapp-float:hover {
+  background: #1ebe5d;
+}
+
+@media (max-width: 768px) {
+  .whatsapp-float {
+    width: 3.25rem;
+    height: 3.25rem;
+    right: max(0.85rem, env(safe-area-inset-right, 0px));
+    bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
+  }
+}
