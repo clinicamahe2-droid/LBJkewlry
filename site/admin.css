@@ -152,6 +152,12 @@ button.primary {
   border-color: #161616;
 }
 
+.admin-tabs .fiado-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .admin-actions {
   display: flex;
   gap: 0.5rem;

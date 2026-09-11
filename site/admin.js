@@ -25,7 +25,6 @@ const listFilter = {
 };
 const salesFilter = { period: "month", category: "all" };
 const fiadoFilter = { status: "all" };
-let salesMode = "cash";
 let clientSearchQuery = "";
 let stockFocusId = null;
 let lastSaleProductId = "";
@@ -629,18 +628,6 @@ function renderFiado() {
   `).join("") : "<p class='panel-hint'>Nenhum fiado registrado ainda.</p>";
 }
 
-function setSalesMode(mode) {
-  salesMode = mode;
-  document.querySelectorAll("[data-sales-mode]").forEach((button) => {
-    const active = button.dataset.salesMode === mode;
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-selected", active ? "true" : "false");
-  });
-  document.getElementById("sales-cash-panel").hidden = mode !== "cash";
-  document.getElementById("sales-fiado-panel").hidden = mode !== "fiado";
-  if (mode === "fiado") renderFiado();
-}
-
 function openClient(client) {
   const form = document.getElementById("client-form");
   form.reset();
@@ -673,7 +660,7 @@ async function loadCatalog() {
   renderBanners();
   renderStock();
   renderSales();
-  if (salesMode === "fiado") renderFiado();
+  renderFiado();
 }
 
 function openProduct(product) {
@@ -789,7 +776,7 @@ document.querySelectorAll(".admin-tabs button").forEach((button) => {
     });
     if (button.dataset.tab === "stock") stockSearch.focus();
     if (button.dataset.tab === "products") productSearch.focus();
-    if (button.dataset.tab === "sales" && salesMode === "fiado") renderFiado();
+    if (button.dataset.tab === "fiado") renderFiado();
   });
 });
 
@@ -813,10 +800,6 @@ document.getElementById("sales-category-filters").addEventListener("click", (eve
   if (!button) return;
   salesFilter.category = button.dataset.saleCat;
   renderSales();
-});
-
-document.querySelectorAll("[data-sales-mode]").forEach((button) => {
-  button.addEventListener("click", () => setSalesMode(button.dataset.salesMode));
 });
 
 document.getElementById("new-client-btn").addEventListener("click", () => openClient(null));
