@@ -243,6 +243,7 @@ function renderFiadoCard(entry) {
         ${renderFiadoPayments(payments)}
       </div>
       <div class="fiado-actions">
+        <button type="button" data-edit-fiado="${text(entry.id)}">Editar fiado</button>
         ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar cliente</button>` : ""}
         ${entry.status !== "paid" ? renderWhatsAppButton(entryForContact) : ""}
         ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
@@ -814,6 +815,67 @@ function openPayment(entry) {
   document.getElementById("payment-dialog").showModal();
 }
 
+function renderFiadoPaymentRow(payment = {}) {
+  const paidDate = payment.paidAt
+    ? String(payment.paidAt).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  return `
+    <article class="fiado-payment-row">
+      <input type="hidden" data-field="id" value="${text(payment.id || "")}">
+      <label>Data<input type="date" data-field="paidAt" value="${paidDate}" required></label>
+      <label>Valor<input type="number" data-field="amount" min="0.01" step="0.01" value="${Number(payment.amount || 0) || ""}" required></label>
+      <label>Obs.<input type="text" data-field="note" value="${text(payment.note || "")}" placeholder="Ex.: PIX"></label>
+      <button type="button" data-remove-payment-row>Remover</button>
+    </article>`;
+}
+
+function renderFiadoPaymentEditor(payments = []) {
+  const list = document.getElementById("fiado-payments-list");
+  if (!list) return;
+  list.innerHTML = payments.length
+    ? payments.map((pay) => renderFiadoPaymentRow(pay)).join("")
+    : "<p class='panel-hint'>Nenhum abatimento registrado.</p>";
+}
+
+function collectFiadoPaymentEditor() {
+  return [...document.querySelectorAll("#fiado-payments-list .fiado-payment-row")].map((row) => ({
+    id: row.querySelector('[data-field="id"]').value,
+    paidAt: row.querySelector('[data-field="paidAt"]').value,
+    amount: Number(row.querySelector('[data-field="amount"]').value),
+    note: row.querySelector('[data-field="note"]').value
+  }));
+}
+
+function updateFiadoEditTotals(form) {
+  const quantity = Number(form.elements.quantity.value || 0);
+  const unitPrice = Number(form.elements.unitPrice.value || 0);
+  const total = quantity * unitPrice;
+  const paid = collectFiadoPaymentEditor().reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
+  const balance = Math.max(0, total - paid);
+  document.getElementById("fiado-edit-totals").innerHTML = `
+    <span>Total: <strong>${money(total)}</strong></span>
+    <span>Pago: <strong>${money(paid)}</strong></span>
+    <span>Saldo: <strong class="payment-summary-balance">${money(balance)}</strong></span>`;
+}
+
+function openFiadoEdit(entry) {
+  const form = document.getElementById("fiado-edit-form");
+  form.reset();
+  showError(document.getElementById("fiado-edit-error"), "");
+  const client = resolveFiadoClient(entry);
+  form.elements.id.value = entry.id;
+  form.elements.quantity.value = entry.quantity;
+  form.elements.unitPrice.value = entry.unitPrice;
+  form.elements.installmentAmount.value = entry.installmentAmount ?? "";
+  form.elements.nextDueDate.value = entry.nextDueDate || "";
+  form.elements.notes.value = entry.notes || "";
+  document.getElementById("fiado-edit-summary").innerHTML =
+    `<strong>${text(client.name)}</strong> · ${text(entry.productName)}`;
+  renderFiadoPaymentEditor(entry.payments || []);
+  updateFiadoEditTotals(form);
+  document.getElementById("fiado-edit-dialog").showModal();
+}
+
 async function loadCatalog() {
   catalog = await request("/api/admin/store");
   if (!Array.isArray(catalog.sales)) catalog.sales = [];
@@ -995,6 +1057,53 @@ document.getElementById("sales-category-filters").addEventListener("click", (eve
 document.getElementById("new-client-btn").addEventListener("click", () => openClient(null));
 document.getElementById("cancel-client").addEventListener("click", () => document.getElementById("client-dialog").close());
 document.getElementById("cancel-payment").addEventListener("click", () => document.getElementById("payment-dialog").close());
+document.getElementById("cancel-fiado-edit").addEventListener("click", () => document.getElementById("fiado-edit-dialog").close());
+
+document.getElementById("add-fiado-payment-row").addEventListener("click", () => {
+  const list = document.getElementById("fiado-payments-list");
+  const hint = list.querySelector(".panel-hint");
+  if (hint) hint.remove();
+  list.insertAdjacentHTML("beforeend", renderFiadoPaymentRow({ note: "Abatimento" }));
+  updateFiadoEditTotals(document.getElementById("fiado-edit-form"));
+});
+
+document.getElementById("fiado-payments-list").addEventListener("click", (event) => {
+  if (!event.target.closest("[data-remove-payment-row]")) return;
+  event.target.closest(".fiado-payment-row")?.remove();
+  const list = document.getElementById("fiado-payments-list");
+  if (!list.querySelector(".fiado-payment-row")) {
+    list.innerHTML = "<p class='panel-hint'>Nenhum abatimento registrado.</p>";
+  }
+  updateFiadoEditTotals(document.getElementById("fiado-edit-form"));
+});
+
+document.getElementById("fiado-edit-form").addEventListener("input", (event) => {
+  updateFiadoEditTotals(event.currentTarget);
+});
+
+document.getElementById("fiado-edit-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorEl = document.getElementById("fiado-edit-error");
+  showError(errorEl, "");
+  const form = event.target;
+  try {
+    await request(`/api/admin/fiado/${form.elements.id.value}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        quantity: Number(form.elements.quantity.value),
+        unitPrice: Number(form.elements.unitPrice.value),
+        installmentAmount: Number(form.elements.installmentAmount.value || 0),
+        nextDueDate: form.elements.nextDueDate.value,
+        notes: form.elements.notes.value,
+        payments: collectFiadoPaymentEditor()
+      })
+    });
+    document.getElementById("fiado-edit-dialog").close();
+    await loadCatalog();
+  } catch (error) {
+    showError(errorEl, error.message);
+  }
+});
 document.getElementById("client-search").addEventListener("input", (event) => {
   clientSearchQuery = event.target.value;
   renderClients();
@@ -1093,6 +1202,12 @@ document.getElementById("fiado-alerts").addEventListener("click", (event) => {
 });
 
 document.getElementById("fiado-list").addEventListener("click", (event) => {
+  const editFiadoId = event.target.closest("[data-edit-fiado]")?.dataset.editFiado;
+  if (editFiadoId) {
+    const entry = catalog.fiado.find((item) => item.id === editFiadoId);
+    if (entry) openFiadoEdit(entry);
+    return;
+  }
   const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
   if (editId) {
     openClientById(editId);

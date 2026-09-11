@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260911f">
+  <link rel="stylesheet" href="admin.css?v=20260911g">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -228,6 +228,37 @@
     </form>
   </dialog>
 
+  <dialog id="fiado-edit-dialog" class="fiado-edit-dialog">
+    <form id="fiado-edit-form" method="dialog">
+      <h2>Editar fiado</h2>
+      <input type="hidden" name="id">
+      <p id="fiado-edit-summary" class="panel-hint"></p>
+      <div class="form-row fiado-edit-row">
+        <label>Quantidade<input type="number" name="quantity" min="1" step="1" required></label>
+        <label>Valor unitário<input type="number" name="unitPrice" min="0" step="0.01" required></label>
+        <label>Parcela<input type="number" name="installmentAmount" min="0" step="0.01" placeholder="Ex.: 200"></label>
+      </div>
+      <div class="form-row fiado-edit-row">
+        <label>Próximo vencimento<input type="date" name="nextDueDate"></label>
+        <label>Observações<input type="text" name="notes" placeholder="Ex.: pagamento todo dia 10"></label>
+      </div>
+      <section class="fiado-payments-editor">
+        <div class="panel-head panel-head--compact">
+          <h3>Abatimentos</h3>
+          <button type="button" id="add-fiado-payment-row">Adicionar</button>
+        </div>
+        <p class="panel-hint">Corrija valores, datas ou remova lançamentos errados.</p>
+        <div id="fiado-payments-list"></div>
+      </section>
+      <p id="fiado-edit-totals" class="fiado-edit-totals"></p>
+      <p id="fiado-edit-error" class="form-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-fiado-edit">Cancelar</button>
+        <button type="submit" class="primary">Salvar alterações</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="payment-dialog">
     <form id="payment-form" method="dialog">
       <h2>Registrar abatimento</h2>
@@ -304,6 +335,6 @@
     </form>
   </dialog>
 
-  <script src="admin.js?v=20260911f"></script>
+  <script src="admin.js?v=20260911g"></script>
 </body>
 </html>

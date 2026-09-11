@@ -467,6 +467,74 @@ async function recordFiadoPayment(fiadoId, input) {
   return updated;
 }
 
+function normalizeFiadoPayments(rawPayments, fallback = []) {
+  const source = Array.isArray(rawPayments) ? rawPayments : fallback;
+  return source.map((pay, index) => {
+    const amount = Math.max(0, toNumber(pay.amount));
+    if (amount <= 0) {
+      throw new Error("Cada abatimento precisa ter valor maior que zero.");
+    }
+    const paidAtRaw = stripTags(pay.paidAt);
+    const paidAt = paidAtRaw
+      ? new Date(`${paidAtRaw.length === 10 ? `${paidAtRaw}T12:00:00` : paidAtRaw}`).toISOString()
+      : new Date().toISOString();
+    if (Number.isNaN(new Date(paidAt).getTime())) {
+      throw new Error("Data de abatimento inválida.");
+    }
+    return {
+      id: stripTags(pay.id) || `pay-${Date.now().toString(36)}-${index}`,
+      amount,
+      paidAt,
+      note: stripTags(pay.note) || "Abatimento"
+    };
+  });
+}
+
+async function updateFiado(fiadoId, input) {
+  const catalog = await loadCatalog();
+  const index = catalog.fiado.findIndex((item) => item.id === fiadoId);
+  if (index === -1) {
+    throw new Error("Fiado não encontrado.");
+  }
+
+  const entry = catalog.fiado[index];
+  const quantity = Math.max(1, Math.floor(toNumber(input.quantity ?? entry.quantity) || 1));
+  const unitPrice = Math.max(0, toNumber(input.unitPrice ?? entry.unitPrice));
+  const total = unitPrice * quantity;
+  const payments = normalizeFiadoPayments(input.payments, entry.payments || []);
+  const paid = payments.reduce((sum, pay) => sum + pay.amount, 0);
+
+  if (paid > total + 0.009) {
+    throw new Error("A soma dos abatimentos não pode ser maior que o total da venda.");
+  }
+
+  const balance = Math.max(0, total - paid);
+  const nextDueDate = stripTags(input.nextDueDate ?? entry.nextDueDate);
+  if (balance > 0 && !nextDueDate) {
+    throw new Error("Informe a data do próximo vencimento.");
+  }
+
+  const installmentRaw = input.installmentAmount ?? entry.installmentAmount;
+  const installmentAmount = balance > 0 ? Math.max(0, toNumber(installmentRaw)) : 0;
+
+  const updated = refreshFiadoStatus({
+    ...entry,
+    quantity,
+    unitPrice,
+    total,
+    paid,
+    balance,
+    payments,
+    nextDueDate: balance > 0 ? nextDueDate : "",
+    installmentAmount,
+    notes: stripTags(input.notes ?? entry.notes)
+  });
+
+  catalog.fiado[index] = updated;
+  await saveCatalog(catalog);
+  return updated;
+}
+
 async function adjustStock(productId, quantity) {
   const catalog = await loadCatalog();
   const product = catalog.products.find((item) => item.id === productId);
@@ -539,6 +607,7 @@ module.exports = {
   recordSale,
   recordFiadoSale,
   recordFiadoPayment,
+  updateFiado,
   saveClient,
   deleteClient,
   adjustStock,

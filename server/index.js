@@ -241,6 +241,14 @@ async function createApp() {
     }
   });
 
+  app.put("/api/admin/fiado/:id", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.updateFiado(req.params.id, req.body));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/admin/clients", requireAdmin, async (req, res) => {
     try {
       res.status(201).json(await store.saveClient(req.body));

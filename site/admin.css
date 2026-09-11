@@ -1117,6 +1117,60 @@ dialog::backdrop {
   font-size: 1.1rem;
 }
 
+.fiado-edit-dialog {
+  width: min(100%, 720px);
+}
+
+.fiado-edit-row {
+  margin-bottom: 0.75rem;
+}
+
+.fiado-payments-editor {
+  margin: 1rem 0;
+  padding: 0.85rem;
+  background: #faf8f4;
+  border: 1px solid #ece8e0;
+}
+
+.fiado-payment-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #ece8e0;
+}
+
+.fiado-payment-row:last-child {
+  border-bottom: 0;
+}
+
+.fiado-payment-row label {
+  margin-bottom: 0;
+}
+
+.fiado-payment-row [data-remove-payment-row] {
+  background: transparent;
+  color: #8a2b2b;
+  border-color: #e8a8a8;
+  justify-self: start;
+}
+
+.fiado-edit-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem;
+  background: #eef4fb;
+  border: 1px solid #9ec5eb;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .fiado-payment-row {
+    grid-template-columns: 1fr 1fr 1.2fr auto;
+    align-items: end;
+  }
+}
+
 @media (min-width: 800px) {
   .fiado-card {
     flex-direction: row;
