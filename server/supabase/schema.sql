@@ -98,4 +98,19 @@ alter table products enable row level security;
 alter table banners enable row level security;
 alter table clients enable row level security;
 alter table sales enable row level security;
+create table if not exists prospects (
+  id text primary key,
+  name text not null,
+  phone text not null,
+  coupon_code text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb
+);
+
 alter table fiado enable row level security;
+alter table prospects enable row level security;
+alter table settings enable row level security;

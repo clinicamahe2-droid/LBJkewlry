@@ -17,11 +17,11 @@ const CATEGORIES = [
   { slug: "aneis", label: "Anéis" }
 ];
 
-let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [] };
+let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [], prospects: [], promoPopup: {} };
 let productImages = [];
 const listFilter = {
-  products: { category: "all", lowStock: false, homeOnly: false, out: false },
-  stock: { category: "all", lowStock: false, homeOnly: false, out: false }
+  products: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false },
+  stock: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false }
 };
 const salesFilter = { period: "month", category: "all" };
 const fiadoFilter = { status: "all" };
@@ -292,12 +292,13 @@ function matchesQuery(item, query) {
   return haystack.includes(query);
 }
 
-function filterItems(query, { category = "all", lowStock = false, homeOnly = false, out = false } = {}) {
+function filterItems(query, { category = "all", lowStock = false, homeOnly = false, out = false, promoOnly = false } = {}) {
   return catalog.products.filter((item) => {
     if (category !== "all" && item.categorySlug !== category) return false;
     if (lowStock && (item.stock ?? 0) > 2) return false;
     if (out && (item.stock ?? 0) > 0) return false;
     if (homeOnly && item.showOnHome === false) return false;
+    if (promoOnly && !isPromoProduct(item)) return false;
     return matchesQuery(item, query);
   });
 }
@@ -317,6 +318,7 @@ function renderFilterChips(containerId, state) {
   const low = catalog.products.filter((item) => (item.stock ?? 0) <= 2).length;
   const out = catalog.products.filter((item) => (item.stock ?? 0) <= 0).length;
   const home = catalog.products.filter((item) => item.showOnHome !== false).length;
+  const promo = catalog.products.filter((item) => isPromoProduct(item)).length;
   node.innerHTML = `
     <button type="button" data-cat="all" class="${state.category === "all" ? "is-active" : ""}">
       Todas <span>${catalog.products.length}</span>
@@ -328,6 +330,9 @@ function renderFilterChips(containerId, state) {
           ${cat.label} <span>${count}</span>
         </button>`;
     }).join("")}
+    <button type="button" data-promo class="filter-chip--promo ${state.promoOnly ? "is-active" : ""}">
+      Promoção <span>${promo}</span>
+    </button>
     <button type="button" data-low class="${state.lowStock ? "is-active" : ""}">
       Baixo <span>${low}</span>
     </button>
@@ -351,6 +356,8 @@ function bindFilterBar(containerId, key, redraw) {
       if (listFilter[key].out) listFilter[key].lowStock = false;
     } else if ("home" in button.dataset) {
       listFilter[key].homeOnly = !listFilter[key].homeOnly;
+    } else if ("promo" in button.dataset) {
+      listFilter[key].promoOnly = !listFilter[key].promoOnly;
     } else if (button.dataset.cat) {
       listFilter[key].category = button.dataset.cat;
     }
@@ -433,9 +440,55 @@ function renderPhotoPreviews() {
 }
 
 function productMeta(item) {
-  const price = `${money(item.priceMin)}${item.priceMin !== item.priceMax ? ` — ${money(item.priceMax)}` : ""}`;
+  const price = hasSalePrice(item)
+    ? `<span class="promo-price">${money(item.priceList)} → ${money(item.priceMax)}</span>`
+    : `${money(item.priceMin)}${item.priceMin !== item.priceMax ? ` — ${money(item.priceMax)}` : ""}`;
   const stockClass = item.stock <= 2 ? "stock-low" : "";
-  return `${price} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}`;
+  const promoTag = isPromoProduct(item) ? ' · <span class="promo-tag">Promoção</span>' : "";
+  return `${price} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}${promoTag}`;
+}
+
+function promoDiscountLabel(item) {
+  if (!hasSalePrice(item)) return "";
+  const pct = Math.round((1 - item.priceMax / item.priceList) * 100);
+  return pct > 0 ? ` (−${pct}%)` : "";
+}
+
+function renderPromoProducts() {
+  const list = document.getElementById("promo-product-list");
+  const count = document.getElementById("promo-count");
+  if (!list) return;
+
+  const promos = catalog.products.filter((item) => isPromoProduct(item));
+  if (count) {
+    count.textContent = promos.length
+      ? `${promos.length} peça${promos.length === 1 ? "" : "s"}`
+      : "Nenhuma";
+  }
+
+  if (!promos.length) {
+    list.innerHTML = "<p class='panel-hint promo-empty'>Nenhum item em promoção no momento.</p>";
+    return;
+  }
+
+  list.innerHTML = promos.map((item) => `
+    <article class="item-card item-card--promo">
+      <img class="thumb" src="${text(item.image)}" alt="">
+      <div class="item-card-body">
+        <h4>${text(item.name)}</h4>
+        <p>
+          ${hasSalePrice(item)
+            ? `<span class="promo-price">${money(item.priceList)} → ${money(item.priceMax)}${promoDiscountLabel(item)}</span>`
+            : `<span class="promo-price">${money(item.priceMax)}</span>`}
+          · ${text(item.category || "")}
+          ${item.badge === "sale" ? ' · <span class="promo-tag">Selo Sale</span>' : ""}
+        </p>
+      </div>
+      <div class="item-card-actions">
+        <button type="button" data-edit="${text(item.id)}">Editar</button>
+      </div>
+    </article>
+  `).join("");
 }
 
 function renderProducts() {
@@ -461,7 +514,7 @@ function renderProducts() {
       </header>
       <div class="item-list">
         ${group.items.map((item) => `
-          <article class="item-card">
+          <article class="item-card${isPromoProduct(item) ? " item-card--promo" : ""}">
             <img class="thumb" src="${text(item.image)}" alt="">
             <div class="item-card-body">
               <h4>${text(item.name)}</h4>
@@ -507,6 +560,76 @@ function bannerMedia(banner) {
     return `<img src="${text(banner.image)}" alt="">`;
   }
   return `<div class="banner-placeholder">Sem mídia</div>`;
+}
+
+function renderPromoPopupSettings() {
+  const popup = catalog.promoPopup || {};
+  const enabled = document.getElementById("promo-enabled");
+  const coupon = document.getElementById("promo-coupon-code");
+  const seller = document.getElementById("promo-seller-phone");
+  const headline = document.getElementById("promo-headline");
+  const instruction = document.getElementById("promo-instruction");
+  const imageHidden = document.getElementById("promo-image");
+  const imageUrl = document.getElementById("promo-image-url");
+  const preview = document.getElementById("promo-image-preview");
+  if (!enabled) return;
+  enabled.checked = popup.enabled !== false;
+  coupon.value = popup.couponCode || "";
+  seller.value = popup.sellerPhone || "";
+  headline.value = popup.headline || "";
+  instruction.value = popup.instruction || "";
+  imageHidden.value = popup.image || "";
+  imageUrl.value = popup.image || "";
+  if (preview) {
+    preview.src = popup.image || "";
+    preview.hidden = !popup.image;
+  }
+}
+
+function collectPromoPopup() {
+  return {
+    enabled: document.getElementById("promo-enabled").checked,
+    couponCode: document.getElementById("promo-coupon-code").value.trim(),
+    sellerPhone: document.getElementById("promo-seller-phone").value.trim(),
+    headline: document.getElementById("promo-headline").value.trim(),
+    instruction: document.getElementById("promo-instruction").value.trim(),
+    image: document.getElementById("promo-image-url").value.trim()
+      || document.getElementById("promo-image").value.trim()
+  };
+}
+
+function renderProspects() {
+  const list = document.getElementById("prospect-list");
+  const count = document.getElementById("prospects-count");
+  if (!list) return;
+  const rows = catalog.prospects || [];
+  if (count) {
+    count.textContent = rows.length
+      ? `${rows.length} cadastro${rows.length === 1 ? "" : "s"}`
+      : "Nenhum";
+  }
+  if (!rows.length) {
+    list.innerHTML = "<p class='panel-hint'>Nenhum prospect cadastrou o cupom ainda.</p>";
+    return;
+  }
+  list.innerHTML = rows.map((item) => {
+    const waHref = whatsAppLink(item.phone, `Olá ${item.name}, tudo bem?`);
+    return `
+      <article class="item-card prospect-card">
+        <div class="item-card-body">
+          <h4>${text(item.name)}</h4>
+          <p>
+            <span class="promo-tag">${text(item.couponCode)}</span>
+            · ${formatDate(item.createdAt)}
+            · ${text(item.phone)}
+          </p>
+        </div>
+        <div class="item-card-actions prospect-actions">
+          ${waHref ? `<a href="${waHref}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn">WhatsApp</a>` : ""}
+          <button type="button" data-delete-prospect="${text(item.id)}">Excluir</button>
+        </div>
+      </article>`;
+  }).join("");
 }
 
 function renderBanners() {
@@ -952,8 +1075,13 @@ async function loadCatalog() {
   if (!Array.isArray(catalog.sales)) catalog.sales = [];
   if (!Array.isArray(catalog.clients)) catalog.clients = [];
   if (!Array.isArray(catalog.fiado)) catalog.fiado = [];
+  if (!Array.isArray(catalog.prospects)) catalog.prospects = [];
+  if (!catalog.promoPopup) catalog.promoPopup = {};
+  renderPromoProducts();
   renderProducts();
+  renderPromoPopupSettings();
   renderBanners();
+  renderProspects();
   renderStock();
   renderSales();
   renderFiado();
@@ -1086,16 +1214,19 @@ async function persistBanners() {
   showError(bannerError, "");
   bannerOk.hidden = true;
   catalog.banners = collectBanners();
+  catalog.promoPopup = collectPromoPopup();
   saveBtn.disabled = true;
   try {
     const data = await request("/api/admin/banners", {
       method: "PUT",
-      body: JSON.stringify({ banners: catalog.banners })
+      body: JSON.stringify({ banners: catalog.banners, promoPopup: catalog.promoPopup })
     });
     catalog.banners = data.banners;
+    catalog.promoPopup = data.promoPopup || catalog.promoPopup;
     renderBanners();
+    renderPromoPopupSettings();
     bannerOk.hidden = false;
-    bannerOk.textContent = "Banners salvos. Atualize a home (Ctrl+F5) para ver a troca.";
+    bannerOk.textContent = "Banners e cupom salvos. Atualize a home (Ctrl+F5) para ver a troca.";
   } catch (error) {
     showError(bannerError, error.message);
   } finally {
@@ -1402,17 +1533,21 @@ document.addEventListener("keydown", (event) => {
   else if (!document.getElementById("tab-products").hidden) productSearch.focus();
 });
 
-productList.addEventListener("click", async (event) => {
-  const editId = event.target.dataset.edit;
-  const deleteId = event.target.dataset.delete;
+function handleProductListClick(event) {
+  const editBtn = event.target.closest("[data-edit]");
+  const deleteBtn = event.target.closest("[data-delete]");
+  const editId = editBtn?.dataset.edit;
+  const deleteId = deleteBtn?.dataset.delete;
   if (editId) {
     openProduct(catalog.products.find((item) => item.id === editId));
   }
   if (deleteId && window.confirm("Excluir este produto da loja?")) {
-    await request(`/api/admin/products/${deleteId}`, { method: "DELETE" });
-    await loadCatalog();
+    request(`/api/admin/products/${deleteId}`, { method: "DELETE" }).then(loadCatalog);
   }
-});
+}
+
+productList.addEventListener("click", handleProductListClick);
+document.getElementById("promo-product-list")?.addEventListener("click", handleProductListClick);
 
 document.getElementById("product-files").addEventListener("change", async (event) => {
   const files = [...event.target.files];
@@ -1635,6 +1770,43 @@ bannerList.addEventListener("click", (event) => {
 
 document.getElementById("save-banners-btn").addEventListener("click", () => {
   persistBanners();
+});
+
+document.getElementById("promo-image-url")?.addEventListener("input", (event) => {
+  const value = event.target.value.trim();
+  document.getElementById("promo-image").value = value;
+  const preview = document.getElementById("promo-image-preview");
+  if (preview) {
+    preview.src = value;
+    preview.hidden = !value;
+  }
+});
+
+document.getElementById("promo-image-upload")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  const bannerError = document.getElementById("banner-error");
+  showError(bannerError, "");
+  try {
+    const uploaded = await uploadFile(file);
+    document.getElementById("promo-image").value = uploaded.url;
+    document.getElementById("promo-image-url").value = uploaded.url;
+    const preview = document.getElementById("promo-image-preview");
+    if (preview) {
+      preview.src = uploaded.url;
+      preview.hidden = false;
+    }
+  } catch (error) {
+    showError(bannerError, error.message);
+  }
+});
+
+document.getElementById("prospect-list")?.addEventListener("click", async (event) => {
+  const deleteId = event.target.closest("[data-delete-prospect]")?.dataset.deleteProspect;
+  if (!deleteId || !window.confirm("Excluir este prospect?")) return;
+  await request(`/api/admin/prospects/${deleteId}`, { method: "DELETE" });
+  await loadCatalog();
 });
 
 request("/api/admin/me")

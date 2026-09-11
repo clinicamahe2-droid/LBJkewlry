@@ -18,17 +18,40 @@ function productHref(id) {
   return href;
 }
 
-function productCardHtml(product) {
+function isPromoProduct(product) {
+  return product.badge === "sale"
+    || Boolean(product.priceList && product.priceList > product.priceMax);
+}
+
+function hasSalePrice(product) {
+  return Boolean(product.priceList && product.priceList > product.priceMax);
+}
+
+function productPriceHtml(product) {
   const hasRange = product.priceMin !== product.priceMax;
-  const badge = product.badge
-    ? `<span class="product-badge ${escapeHtml(product.badge)}">${product.badge === "sale" ? "SALE" : "LANÇAMENTO"}</span>`
-    : "";
+  if (hasSalePrice(product)) {
+    return `
+      <p class="product-price product-price--promo">
+        <span class="product-price-old">${formatPrice(product.priceList)}</span>
+        <span class="product-price-current">${formatPrice(product.priceMin)}${hasRange ? ` — ${formatPrice(product.priceMax)}` : ""}</span>
+      </p>`;
+  }
+  return `<p class="product-price">${formatPrice(product.priceMin)}${hasRange ? ` — ${formatPrice(product.priceMax)}` : ""}</p>`;
+}
+
+function productCardHtml(product) {
+  const isPromo = isPromoProduct(product);
+  const badge = product.badge === "new"
+    ? `<span class="product-badge new">LANÇAMENTO</span>`
+    : isPromo
+      ? `<span class="product-badge sale">SALE</span>`
+      : "";
   const cover = product.image || product.images?.[0] || "";
   const hover = (product.images || []).find((src) => src && src !== cover) || "";
   const href = productHref(product.id);
 
   return `
-    <article class="product-card">
+    <article class="product-card${isPromo ? " product-card--promo" : ""}">
       <a class="product-card-link" href="${href}">
         <div class="product-card-image">
           ${badge}
@@ -38,7 +61,7 @@ function productCardHtml(product) {
         <div class="product-card-body">
           <p class="product-category">${escapeHtml(product.category || "")}</p>
           <h3 class="product-name">${escapeHtml(product.name)}</h3>
-          <p class="product-price">${formatPrice(product.priceMin)}${hasRange ? ` — ${formatPrice(product.priceMax)}` : ""}</p>
+          ${productPriceHtml(product)}
         </div>
       </a>
       <a class="product-cta" href="${href}">VER MAIS</a>

@@ -278,6 +278,18 @@ button.primary {
   border-color: #161616;
 }
 
+.filter-chips button.filter-chip--promo {
+  color: #8a6d2e;
+  border-color: rgba(176, 141, 58, 0.45);
+  background: rgba(176, 141, 58, 0.08);
+}
+
+.filter-chips button.filter-chip--promo.is-active {
+  background: #8a6d2e;
+  color: #fff;
+  border-color: #8a6d2e;
+}
+
 .filter-chips button span {
   margin-left: 0.35rem;
   font-size: 0.7rem;
@@ -1459,6 +1471,150 @@ dialog::backdrop {
 
   .dialog-actions {
     display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.promo-block {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(176, 141, 58, 0.12), rgba(255, 255, 255, 0.95));
+  border: 1px solid rgba(176, 141, 58, 0.35);
+  border-left: 4px solid #b08d3a;
+}
+
+.promo-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.promo-block-head h3 {
+  font-family: Oswald, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  color: #8a6d2e;
+}
+
+.promo-count {
+  font-size: 0.75rem;
+  color: #8a6d2e;
+  letter-spacing: 0.04em;
+}
+
+.promo-hint {
+  margin-bottom: 0.85rem;
+}
+
+.promo-product-list {
+  margin-top: 0.25rem;
+}
+
+.item-card--promo {
+  border-color: rgba(176, 141, 58, 0.45);
+  background: rgba(176, 141, 58, 0.06);
+}
+
+.promo-price {
+  color: #8a6d2e;
+  font-weight: 500;
+}
+
+.promo-tag {
+  display: inline-block;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a6d2e;
+  background: rgba(176, 141, 58, 0.15);
+  border: 1px solid rgba(176, 141, 58, 0.35);
+  padding: 0.1rem 0.35rem;
+}
+
+.promo-empty {
+  margin: 0;
+}
+
+.promo-popup-settings {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(176, 141, 58, 0.1), #fff);
+  border: 1px solid rgba(176, 141, 58, 0.35);
+  border-left: 4px solid #b08d3a;
+}
+
+.promo-popup-settings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.promo-popup-settings-head h3 {
+  font-family: Oswald, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  color: #8a6d2e;
+}
+
+.promo-enabled-label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.promo-popup-settings-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.promo-settings-wide {
+  grid-column: 1 / -1;
+}
+
+.promo-popup-settings textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d8d4cc;
+  font: inherit;
+  resize: vertical;
+}
+
+.promo-image-preview-wrap {
+  grid-column: 1 / -1;
+}
+
+.promo-image-preview {
+  display: block;
+  width: min(100%, 420px);
+  border: 1px solid #d8d4cc;
+}
+
+.prospect-card {
+  border-color: rgba(176, 141, 58, 0.35);
+}
+
+.prospect-actions {
+  align-items: stretch;
+}
+
+.prospect-actions .whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (min-width: 800px) {
+  .promo-popup-settings-grid {
     grid-template-columns: 1fr 1fr;
   }
 }

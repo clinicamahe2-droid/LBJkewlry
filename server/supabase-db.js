@@ -170,6 +170,26 @@ function fiadoFromRow(row) {
   };
 }
 
+function prospectToRow(prospect) {
+  return {
+    id: prospect.id,
+    name: prospect.name,
+    phone: prospect.phone,
+    coupon_code: prospect.couponCode,
+    created_at: prospect.createdAt || new Date().toISOString()
+  };
+}
+
+function prospectFromRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    couponCode: row.coupon_code,
+    createdAt: row.created_at
+  };
+}
+
 async function syncTable(table, rows, mapRow) {
   const supabase = getSupabase();
   const payload = rows.map(mapRow);
@@ -192,12 +212,14 @@ async function syncTable(table, rows, mapRow) {
 
 async function loadCatalogFromSupabase() {
   const supabase = getSupabase();
-  const [productsRes, bannersRes, clientsRes, salesRes, fiadoRes] = await Promise.all([
+  const [productsRes, bannersRes, clientsRes, salesRes, fiadoRes, prospectsRes, settingsRes] = await Promise.all([
     supabase.from("products").select("*"),
     supabase.from("banners").select("*").order("sort_order", { ascending: true }),
     supabase.from("clients").select("*").order("created_at", { ascending: false }),
     supabase.from("sales").select("*").order("created_at", { ascending: false }),
-    supabase.from("fiado").select("*").order("created_at", { ascending: false })
+    supabase.from("fiado").select("*").order("created_at", { ascending: false }),
+    supabase.from("prospects").select("*").order("created_at", { ascending: false }),
+    supabase.from("settings").select("key, value").eq("key", "promo_popup").maybeSingle()
   ]);
 
   throwIfError(productsRes.error);
@@ -205,22 +227,35 @@ async function loadCatalogFromSupabase() {
   throwIfError(clientsRes.error);
   throwIfError(salesRes.error);
   throwIfError(fiadoRes.error);
+  throwIfError(prospectsRes.error);
+  throwIfError(settingsRes.error);
 
   return {
     products: (productsRes.data || []).map(productFromRow),
     banners: (bannersRes.data || []).map(bannerFromRow),
     clients: (clientsRes.data || []).map(clientFromRow),
     sales: (salesRes.data || []).map(saleFromRow),
-    fiado: (fiadoRes.data || []).map(fiadoFromRow)
+    fiado: (fiadoRes.data || []).map(fiadoFromRow),
+    prospects: (prospectsRes.data || []).map(prospectFromRow),
+    promoPopup: settingsRes.data?.value || null
   };
 }
 
 async function saveCatalogToSupabase(catalog) {
+  const supabase = getSupabase();
   await syncTable("clients", catalog.clients || [], clientToRow);
   await syncTable("products", catalog.products || [], productToRow);
   await syncTable("banners", catalog.banners || [], bannerToRow);
   await syncTable("fiado", catalog.fiado || [], (entry) => fiadoToRow(entry));
   await syncTable("sales", catalog.sales || [], saleToRow);
+  await syncTable("prospects", catalog.prospects || [], prospectToRow);
+  if (catalog.promoPopup) {
+    const { error } = await supabase.from("settings").upsert({
+      key: "promo_popup",
+      value: catalog.promoPopup
+    }, { onConflict: "key" });
+    throwIfError(error);
+  }
 }
 
 module.exports = {

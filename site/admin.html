@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260911l">
+  <link rel="stylesheet" href="admin.css?v=20260913">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -56,6 +56,7 @@
           Fiado
         </button>
         <button type="button" data-tab="banners">Banner</button>
+        <button type="button" data-tab="prospects">Prospects</button>
         <span class="admin-tabs-spacer" aria-hidden="true"></span>
       </nav>
     </header>
@@ -66,6 +67,14 @@
           <h2>Catálogo</h2>
           <button id="new-product-btn" type="button">Novo produto</button>
         </div>
+        <section class="promo-block" id="promo-products-block">
+          <div class="promo-block-head">
+            <h3>Itens em promoção</h3>
+            <span class="promo-count" id="promo-count"></span>
+          </div>
+          <p class="panel-hint promo-hint">Marque o selo <strong>Sale</strong> ou preencha um preço riscado maior que o preço atual.</p>
+          <div id="promo-product-list" class="item-list promo-product-list"></div>
+        </section>
         <div class="ops-toolbar">
           <input id="product-search" type="search" placeholder="Buscar peça, coleção ou categoria" autocomplete="off">
           <div class="filter-chips" id="product-filters" role="group" aria-label="Filtrar produtos por categoria"></div>
@@ -205,11 +214,48 @@
           <h2>Banner de entrada</h2>
           <button id="add-banner-btn" type="button">Adicionar slide</button>
         </div>
+        <section class="promo-popup-settings" id="promo-popup-settings">
+          <div class="promo-popup-settings-head">
+            <h3>Pop-up promocional (cupom)</h3>
+            <label class="check-label promo-enabled-label">
+              <input type="checkbox" id="promo-enabled">
+              Ativo na home
+            </label>
+          </div>
+          <p class="panel-hint">Card que aparece ao abrir a loja. O visitante preenche nome e WhatsApp para ver o cupom.</p>
+          <div class="promo-popup-settings-grid">
+            <label>Código do cupom<input type="text" id="promo-coupon-code" placeholder="SETEMBRO10"></label>
+            <label>WhatsApp do vendedor<input type="tel" id="promo-seller-phone" placeholder="08007708540"></label>
+            <label>Título do pop-up<input type="text" id="promo-headline" placeholder="Ganhe seu cupom de desconto"></label>
+            <label class="promo-settings-wide">Instrução após liberar o cupom
+              <textarea id="promo-instruction" rows="2" placeholder="Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto."></textarea>
+            </label>
+            <input type="hidden" id="promo-image" value="">
+            <label class="promo-settings-wide">Imagem do card promocional
+              <input type="text" id="promo-image-url" placeholder="assets/promo-coupon-setembro.jpg">
+            </label>
+            <label class="file-label promo-settings-wide">Enviar nova imagem
+              <input type="file" id="promo-image-upload" accept="image/jpeg,image/png,image/webp">
+            </label>
+            <div class="promo-image-preview-wrap">
+              <img id="promo-image-preview" class="promo-image-preview" src="" alt="">
+            </div>
+          </div>
+        </section>
         <p class="panel-hint">Envie foto ou vídeo (máx. 50 MB) ou cole o link do arquivo. Se o vídeo atual já aparece na loja, basta salvar sem reenviar.</p>
         <p id="banner-error" class="form-error" hidden></p>
         <p id="banner-ok" class="form-ok" hidden></p>
         <div id="banner-list"></div>
-        <button id="save-banners-btn" type="button" class="primary">Salvar banners</button>
+        <button id="save-banners-btn" type="button" class="primary">Salvar banners e cupom</button>
+      </section>
+
+      <section id="tab-prospects" class="tab-panel" hidden>
+        <div class="panel-head">
+          <h2>Prospects</h2>
+          <span class="promo-count" id="prospects-count"></span>
+        </div>
+        <p class="panel-hint">Pessoas que se cadastraram no pop-up promocional da home para receber o cupom.</p>
+        <div id="prospect-list" class="item-list"></div>
       </section>
     </main>
   </div>
@@ -338,6 +384,7 @@
     </form>
   </dialog>
 
-  <script src="admin.js?v=20260911l"></script>
+  <script src="catalog.js?v=20260913"></script>
+  <script src="admin.js?v=20260913"></script>
 </body>
 </html>

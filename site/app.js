@@ -140,6 +140,21 @@ function renderShelves(products) {
   });
 }
 
+function renderPromoShelf(products) {
+  const section = document.getElementById("promocoes");
+  const grid = document.getElementById("promo-grid");
+  if (!section || !grid) return;
+
+  const items = products.filter((item) => isPromoProduct(item) && item.showOnHome !== false);
+  if (!items.length) {
+    section.hidden = true;
+    return;
+  }
+
+  section.hidden = false;
+  grid.innerHTML = items.map(productCardHtml).join("");
+}
+
 function setupChainSlider() {
   function scrollTrack(direction) {
     const amount = track.clientWidth * 0.6;
@@ -152,12 +167,110 @@ function setupChainSlider() {
   }
 }
 
+const PROMO_STORAGE_KEY = "lb_promo_coupon";
+const PROMO_DISMISS_KEY = "lb_promo_closed";
+
+function phoneDigits(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function sellerWhatsAppLink(phone, name, couponCode) {
+  const digits = phoneDigits(phone);
+  if (!digits) return "";
+  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+  const message = `Olá! Me chamo ${name}. Ganhei o cupom ${couponCode} no site LB jewelry e gostaria do desconto.`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+}
+
+function closePromoPopup() {
+  const popup = document.getElementById("promo-popup");
+  if (!popup) return;
+  popup.hidden = true;
+  document.body.classList.remove("promo-open");
+  sessionStorage.setItem(PROMO_DISMISS_KEY, "1");
+}
+
+function showPromoCouponStep(data, name) {
+  document.getElementById("promo-step-form").hidden = true;
+  const couponStep = document.getElementById("promo-step-coupon");
+  couponStep.hidden = false;
+  document.getElementById("promo-coupon-code").textContent = data.couponCode;
+  document.getElementById("promo-coupon-instruction").textContent = data.instruction
+    || "Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto.";
+  const waLink = document.getElementById("promo-seller-whatsapp");
+  waLink.href = sellerWhatsAppLink(data.sellerPhone, name, data.couponCode);
+  localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({
+    couponCode: data.couponCode,
+    name,
+    claimedAt: new Date().toISOString()
+  }));
+}
+
+function setupPromoPopup(promoPopup) {
+  const popup = document.getElementById("promo-popup");
+  const form = document.getElementById("promo-popup-form");
+  if (!popup || !form || !promoPopup?.enabled) return;
+  if (localStorage.getItem(PROMO_STORAGE_KEY) || sessionStorage.getItem(PROMO_DISMISS_KEY)) return;
+
+  const image = document.getElementById("promo-popup-image");
+  if (image && promoPopup.image) {
+    image.src = promoPopup.image;
+    image.alt = promoPopup.headline || "Promoção LB jewelry";
+  }
+  const title = document.getElementById("promo-popup-title");
+  if (title && promoPopup.headline) {
+    title.textContent = promoPopup.headline;
+  }
+
+  popup.querySelectorAll("[data-promo-close]").forEach((node) => {
+    node.addEventListener("click", closePromoPopup);
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorNode = document.getElementById("promo-popup-error");
+    const submitBtn = form.querySelector("button[type='submit']");
+    errorNode.hidden = true;
+    submitBtn.disabled = true;
+    const payload = {
+      name: String(form.elements.name.value || "").trim(),
+      phone: String(form.elements.phone.value || "").trim()
+    };
+    try {
+      const response = await fetch("/api/prospects", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível liberar o cupom.");
+      }
+      showPromoCouponStep(data, payload.name);
+    } catch (error) {
+      errorNode.hidden = false;
+      errorNode.textContent = error.message;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  window.setTimeout(() => {
+    popup.hidden = false;
+    document.body.classList.add("promo-open");
+    form.elements.name.focus();
+  }, 700);
+}
+
 setupChainSlider();
 
 fetchCatalog()
   .then((catalog) => {
     setupHero(catalog.banners);
+    renderPromoShelf(catalog.products);
     renderShelves(catalog.products);
+    setupPromoPopup(catalog.promoPopup);
   })
   .catch(() => {
     if (heroTrack && !heroTrack.children.length) {

@@ -115,6 +115,7 @@ const uploadImage = makeUploader({ allowVideo: false, maxBytes: 5 * 1024 * 1024 
 const uploadBanner = makeUploader({ allowVideo: true, maxBytes: storage.getMaxBannerVideoBytes() });
 
 const loginAttempts = new Map();
+const prospectAttempts = new Map();
 
 function loginLimited(req, res, next) {
   const ip = req.ip || "local";
@@ -130,6 +131,23 @@ function loginLimited(req, res, next) {
   }
   req.loginRecord = record;
   loginAttempts.set(ip, record);
+  next();
+}
+
+function prospectLimited(req, res, next) {
+  const ip = req.ip || "local";
+  const now = Date.now();
+  const record = prospectAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + 15 * 60 * 1000;
+  }
+  if (record.count >= 20) {
+    res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos." });
+    return;
+  }
+  record.count += 1;
+  prospectAttempts.set(ip, record);
   next();
 }
 
@@ -178,6 +196,19 @@ async function createApp() {
       res.json(product);
     } catch (error) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/prospects", prospectLimited, async (req, res) => {
+    try {
+      const result = await store.registerProspect(req.body || {});
+      res.status(201).json({
+        couponCode: result.couponCode,
+        sellerPhone: result.sellerPhone,
+        instruction: result.instruction
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
   });
 
@@ -338,8 +369,19 @@ async function createApp() {
       }
       const catalog = await store.loadCatalog();
       catalog.banners = banners.map(store.normalizeBanner);
+      if (req.body?.promoPopup) {
+        catalog.promoPopup = store.normalizePromoPopup(req.body.promoPopup);
+      }
       await store.saveCatalog(catalog);
-      res.json({ banners: catalog.banners });
+      res.json({ banners: catalog.banners, promoPopup: catalog.promoPopup });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/prospects/:id", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.deleteProspect(req.params.id));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }

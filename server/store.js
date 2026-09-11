@@ -61,8 +61,112 @@ function migrateCatalogData(catalog) {
     next.fiado = [];
     changed = true;
   }
+  if (!Array.isArray(next.prospects)) {
+    next.prospects = [];
+    changed = true;
+  }
+  if (!next.promoPopup || typeof next.promoPopup !== "object") {
+    next.promoPopup = defaultPromoPopup();
+    changed = true;
+  } else {
+    next.promoPopup = normalizePromoPopup(next.promoPopup);
+  }
   next.fiado = next.fiado.map((entry) => refreshFiadoStatus(entry));
   return { catalog: next, changed };
+}
+
+function defaultPromoPopup() {
+  return {
+    enabled: true,
+    image: "assets/promo-coupon-setembro.jpg",
+    couponCode: "SETEMBRO10",
+    sellerPhone: "08007708540",
+    headline: "Ganhe seu cupom de desconto",
+    instruction: "Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto."
+  };
+}
+
+function normalizePhoneDigits(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 13) {
+    throw new Error("Informe um WhatsApp válido com DDD.");
+  }
+  return digits;
+}
+
+function normalizePromoPopup(input = {}) {
+  const enabled = input.enabled !== false;
+  const image = stripTags(input.image) || defaultPromoPopup().image;
+  const couponCode = stripTags(input.couponCode).toUpperCase().replace(/\s+/g, "");
+  const sellerPhone = stripTags(input.sellerPhone).replace(/\D/g, "") || defaultPromoPopup().sellerPhone;
+  const headline = stripTags(input.headline) || defaultPromoPopup().headline;
+  const instruction = stripTags(input.instruction) || defaultPromoPopup().instruction;
+  return {
+    enabled,
+    image,
+    couponCode: couponCode || defaultPromoPopup().couponCode,
+    sellerPhone,
+    headline,
+    instruction
+  };
+}
+
+function normalizeProspect(input, couponCode) {
+  const name = stripTags(input.name);
+  if (!name || name.length < 2) {
+    throw new Error("Informe seu nome.");
+  }
+  const phone = normalizePhoneDigits(input.phone);
+  return {
+    id: stripTags(input.id) || `prospect-${Date.now().toString(36)}`,
+    name,
+    phone,
+    couponCode: stripTags(couponCode),
+    createdAt: stripTags(input.createdAt) || new Date().toISOString()
+  };
+}
+
+async function registerProspect(input) {
+  const catalog = await loadCatalog();
+  const popup = normalizePromoPopup(catalog.promoPopup);
+  if (!popup.enabled) {
+    throw new Error("Promoção indisponível no momento.");
+  }
+  if (!popup.couponCode) {
+    throw new Error("Cupom não configurado.");
+  }
+  const phone = normalizePhoneDigits(input.phone);
+  const existing = catalog.prospects.find(
+    (item) => item.phone === phone && item.couponCode === popup.couponCode
+  );
+  if (existing) {
+    return {
+      prospect: existing,
+      couponCode: popup.couponCode,
+      sellerPhone: popup.sellerPhone,
+      instruction: popup.instruction
+    };
+  }
+  const prospect = normalizeProspect(input, popup.couponCode);
+  catalog.prospects.unshift(prospect);
+  await saveCatalog(catalog);
+  return {
+    prospect,
+    couponCode: popup.couponCode,
+    sellerPhone: popup.sellerPhone,
+    instruction: popup.instruction
+  };
+}
+
+async function deleteProspect(prospectId) {
+  const catalog = await loadCatalog();
+  const next = catalog.prospects.filter((item) => item.id !== prospectId);
+  if (next.length === catalog.prospects.length) {
+    throw new Error("Prospect não encontrado.");
+  }
+  catalog.prospects = next;
+  await saveCatalog(catalog);
+  return { ok: true };
 }
 
 function migrateCatalog(catalog) {
@@ -226,9 +330,17 @@ function normalizeProduct(input, existingId) {
 
 async function publicCatalog() {
   const catalog = await loadCatalog();
+  const popup = normalizePromoPopup(catalog.promoPopup);
   return {
     products: catalog.products,
-    banners: catalog.banners
+    banners: catalog.banners,
+    promoPopup: popup.enabled
+      ? {
+          enabled: true,
+          image: popup.image,
+          headline: popup.headline
+        }
+      : { enabled: false }
   };
 }
 
@@ -608,6 +720,10 @@ module.exports = {
   normalizeProduct,
   normalizeBanner,
   normalizeClient,
+  normalizePromoPopup,
+  defaultPromoPopup,
+  registerProspect,
+  deleteProspect,
   publicCatalog,
   recordSale,
   recordFiadoSale,

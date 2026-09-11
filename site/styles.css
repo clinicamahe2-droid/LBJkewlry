@@ -824,6 +824,60 @@ button {
   color: var(--ivory);
 }
 
+.shelf--promo {
+  padding: 2rem 0 2.5rem;
+  background: linear-gradient(135deg, rgba(176, 141, 58, 0.14) 0%, rgba(22, 22, 22, 0.95) 45%, rgba(176, 141, 58, 0.1) 100%);
+  border-block: 1px solid rgba(201, 178, 122, 0.35);
+}
+
+.shelf-head--promo h2 {
+  color: var(--gold-light);
+}
+
+.promo-label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-primary);
+  background: rgba(176, 141, 58, 0.18);
+  border: 1px solid rgba(201, 178, 122, 0.35);
+  padding: 0.35rem 0.75rem;
+}
+
+.shop-filters-promo {
+  color: var(--gold-light) !important;
+  border-color: rgba(201, 178, 122, 0.45) !important;
+  background: rgba(176, 141, 58, 0.12);
+}
+
+.product-card--promo {
+  border-color: rgba(201, 178, 122, 0.55);
+  box-shadow: 0 0 0 1px rgba(176, 141, 58, 0.2), var(--shadow-gold);
+}
+
+.product-card--promo .product-badge.sale {
+  background: rgba(176, 141, 58, 0.35);
+  color: var(--gold-light);
+}
+
+.product-price--promo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.product-price-old {
+  font-size: 0.75rem;
+  color: var(--text-dark-muted);
+  text-decoration: line-through;
+}
+
+.product-price-current {
+  font-size: 0.9375rem;
+  color: var(--gold-light);
+  font-weight: 500;
+}
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1740,4 +1794,169 @@ button {
     font-size: 0.5625rem;
     padding: 0.15rem 0.35rem;
   }
+}
+
+body.promo-open {
+  overflow: hidden;
+}
+
+.promo-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.promo-popup-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.promo-popup-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  max-height: min(92vh, 760px);
+  overflow: auto;
+  background: var(--surface-light);
+  border: 1px solid rgba(201, 178, 122, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.promo-popup-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.promo-popup-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.promo-popup-body {
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.promo-popup-body h2 {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-primary);
+  margin-bottom: 0.5rem;
+}
+
+.promo-popup-lead {
+  color: var(--text-dark-muted);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.promo-popup-body label {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dark-muted);
+  margin-bottom: 0.85rem;
+}
+
+.promo-popup-body input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-light);
+  background: #fff;
+  color: var(--text-dark);
+  font-size: 0.9375rem;
+}
+
+.promo-popup-error {
+  color: #b42318;
+  font-size: 0.8125rem;
+  margin-bottom: 0.75rem;
+}
+
+.promo-popup-submit,
+.promo-popup-done {
+  width: 100%;
+  border: none;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.promo-popup-submit {
+  background: var(--gold-primary);
+  color: var(--surface-light);
+}
+
+.promo-popup-done {
+  margin-top: 0.65rem;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-dark-muted);
+}
+
+.promo-step {
+  display: block;
+}
+
+#promo-step-coupon {
+  padding: 1.5rem 1.25rem 1.75rem;
+  text-align: center;
+}
+
+.promo-popup-success {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dark-muted);
+  margin-bottom: 0.5rem;
+}
+
+.promo-coupon-code {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  letter-spacing: 0.18em;
+  color: var(--gold-primary);
+  margin-bottom: 0.75rem;
+}
+
+.promo-coupon-instruction {
+  color: var(--text-dark-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.promo-whatsapp-btn {
+  display: block;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background: #25d366;
+  color: #fff;
+  text-align: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
 }

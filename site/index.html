@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260911">
+  <link rel="stylesheet" href="styles.css?v=20260913">
   <link rel="preload" href="/api/catalog" as="fetch" crossorigin>
 </head>
 <body>
@@ -126,11 +126,22 @@
   </section>
 
   <nav class="shop-filters" aria-label="Filtrar por categoria">
+    <a href="#promocoes" class="shop-filters-promo">Promoções</a>
     <a href="#correntes">Correntes</a>
     <a href="#brincos">Brincos</a>
     <a href="#pulseiras">Pulseiras</a>
     <a href="#aneis">Anéis</a>
   </nav>
+
+  <section class="shelf shelf--promo" id="promocoes" hidden>
+    <div class="container">
+      <div class="shelf-head shelf-head--promo">
+        <h2>Itens em promoção</h2>
+        <span class="promo-label">Ofertas selecionadas</span>
+      </div>
+      <div class="product-grid product-grid--promo" id="promo-grid"></div>
+    </div>
+  </section>
 
   <section class="shelf" id="correntes">
     <div class="container">
@@ -174,6 +185,39 @@
 
   </main>
 
+  <div id="promo-popup" class="promo-popup" hidden>
+    <div class="promo-popup-backdrop" data-promo-close></div>
+    <div class="promo-popup-card" role="dialog" aria-modal="true" aria-labelledby="promo-popup-title">
+      <button type="button" class="promo-popup-close" data-promo-close aria-label="Fechar">&times;</button>
+      <div id="promo-step-form" class="promo-step">
+        <img id="promo-popup-image" class="promo-popup-image" src="" alt="Promoção LB jewelry">
+        <div class="promo-popup-body">
+          <h2 id="promo-popup-title">Ganhe seu cupom</h2>
+          <p class="promo-popup-lead">Preencha nome e WhatsApp para liberar o cupom de desconto.</p>
+          <form id="promo-popup-form">
+            <label>
+              Nome
+              <input type="text" name="name" required autocomplete="name" placeholder="Seu nome">
+            </label>
+            <label>
+              WhatsApp
+              <input type="tel" name="phone" required autocomplete="tel" placeholder="(11) 99999-9999">
+            </label>
+            <p id="promo-popup-error" class="promo-popup-error" hidden></p>
+            <button type="submit" class="promo-popup-submit">Liberar cupom</button>
+          </form>
+        </div>
+      </div>
+      <div id="promo-step-coupon" class="promo-step" hidden>
+        <p class="promo-popup-success">Seu cupom:</p>
+        <p id="promo-coupon-code" class="promo-coupon-code"></p>
+        <p id="promo-coupon-instruction" class="promo-coupon-instruction"></p>
+        <a id="promo-seller-whatsapp" class="promo-whatsapp-btn" href="#" target="_blank" rel="noopener noreferrer">Chamar vendedor no WhatsApp</a>
+        <button type="button" class="promo-popup-done" data-promo-close>Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="container footer-grid">
       <div>
@@ -203,7 +247,7 @@
     </div>
   </footer>
 
-  <script src="catalog.js?v=20260911"></script>
-  <script src="app.js?v=20260911"></script>
+  <script src="catalog.js?v=20260913"></script>
+  <script src="app.js?v=20260913"></script>
 </body>
 </html>
