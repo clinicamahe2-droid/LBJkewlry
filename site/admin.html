@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260913">
+  <link rel="stylesheet" href="admin.css?v=20260914b">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -232,7 +232,7 @@
             </label>
             <input type="hidden" id="promo-image" value="">
             <label class="promo-settings-wide">Imagem do card promocional
-              <input type="text" id="promo-image-url" placeholder="assets/promo-coupon-setembro.jpg">
+              <input type="text" id="promo-image-url" placeholder="/assets/promo-coupon-setembro.jpg">
             </label>
             <label class="file-label promo-settings-wide">Enviar nova imagem
               <input type="file" id="promo-image-upload" accept="image/jpeg,image/png,image/webp">
@@ -250,12 +250,15 @@
       </section>
 
       <section id="tab-prospects" class="tab-panel" hidden>
-        <div class="panel-head">
-          <h2>Prospects</h2>
-          <span class="promo-count" id="prospects-count"></span>
+        <div class="prospects-hero">
+          <div>
+            <p class="prospects-kicker">Leads do cupom</p>
+            <h2>Prospects</h2>
+            <p class="panel-hint">Quem pediu o cupom na home. Entre em contato pelo WhatsApp.</p>
+          </div>
+          <span class="prospects-count" id="prospects-count">0</span>
         </div>
-        <p class="panel-hint">Pessoas que se cadastraram no pop-up promocional da home para receber o cupom.</p>
-        <div id="prospect-list" class="item-list"></div>
+        <div id="prospect-list" class="prospect-list"></div>
       </section>
     </main>
   </div>
@@ -384,7 +387,7 @@
     </form>
   </dialog>
 
-  <script src="catalog.js?v=20260913"></script>
-  <script src="admin.js?v=20260913"></script>
+  <script src="catalog.js?v=20260914"></script>
+  <script src="admin.js?v=20260914b"></script>
 </body>
 </html>

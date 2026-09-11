@@ -1800,51 +1800,74 @@ body.promo-open {
   overflow: hidden;
 }
 
-.promo-popup {
+.promo-popup,
+.promo-popup[hidden] {
+  display: none !important;
+}
+
+.promo-popup.is-open {
+  display: flex !important;
   position: fixed;
   inset: 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
+  z-index: 400;
+  align-items: flex-start;
+  justify-content: center;
+  padding:
+    max(0.75rem, env(safe-area-inset-top, 0px))
+    max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px))
+    max(0.75rem, env(safe-area-inset-left, 0px));
+  overflow: auto;
+}
+
+@media (min-width: 700px) {
+  .promo-popup.is-open {
+    align-items: center;
+  }
 }
 
 .promo-popup-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  z-index: 0;
   background: rgba(0, 0, 0, 0.72);
+  cursor: pointer;
 }
 
 .promo-popup-card {
   position: relative;
   z-index: 1;
   width: min(100%, 560px);
-  max-height: min(92vh, 760px);
+  max-height: min(88dvh, 760px);
   overflow: auto;
-  background: var(--surface-light);
+  background: #f7f4ee;
   border: 1px solid rgba(201, 178, 122, 0.45);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
 
 .promo-popup-close {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 2;
-  width: 2rem;
-  height: 2rem;
+  display: block;
+  width: 100%;
   border: none;
-  background: rgba(0, 0, 0, 0.55);
+  background: #161616;
   color: #fff;
-  font-size: 1.35rem;
-  line-height: 1;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
+}
+
+.promo-popup-visual {
+  min-height: 180px;
+  background: #111 url("/assets/promo-coupon-setembro.jpg") center / cover no-repeat;
 }
 
 .promo-popup-image {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 240px;
   object-fit: cover;
 }
 
@@ -1894,7 +1917,8 @@ body.promo-open {
 }
 
 .promo-popup-submit,
-.promo-popup-done {
+.promo-popup-done,
+.promo-popup-skip {
   width: 100%;
   border: none;
   padding: 0.85rem 1rem;
@@ -1909,6 +1933,7 @@ body.promo-open {
   color: var(--surface-light);
 }
 
+.promo-popup-skip,
 .promo-popup-done {
   margin-top: 0.65rem;
   background: transparent;

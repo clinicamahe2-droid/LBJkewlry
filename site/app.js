@@ -182,13 +182,36 @@ function sellerWhatsAppLink(phone, name, couponCode) {
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
-function closePromoPopup() {
+function promoImageSrc(src) {
+  if (!src) return "/assets/promo-coupon-setembro.jpg";
+  if (/^https?:\/\//i.test(src) || src.startsWith("/")) return src;
+  return `/${src}`;
+}
+
+function closePromoPopup(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
   const popup = document.getElementById("promo-popup");
   if (!popup) return;
+  popup.classList.remove("is-open");
   popup.hidden = true;
+  popup.setAttribute("hidden", "");
   document.body.classList.remove("promo-open");
   sessionStorage.setItem(PROMO_DISMISS_KEY, "1");
 }
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-promo-close]")) {
+    closePromoPopup(event);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const popup = document.getElementById("promo-popup");
+  if (event.key === "Escape" && popup?.classList.contains("is-open")) {
+    closePromoPopup(event);
+  }
+});
 
 function showPromoCouponStep(data, name) {
   document.getElementById("promo-step-form").hidden = true;
@@ -213,18 +236,19 @@ function setupPromoPopup(promoPopup) {
   if (localStorage.getItem(PROMO_STORAGE_KEY) || sessionStorage.getItem(PROMO_DISMISS_KEY)) return;
 
   const image = document.getElementById("promo-popup-image");
-  if (image && promoPopup.image) {
-    image.src = promoPopup.image;
+  const imageSrc = promoImageSrc(promoPopup.image);
+  if (image) {
+    image.src = imageSrc;
     image.alt = promoPopup.headline || "Promoção LB jewelry";
+  }
+  const visual = document.querySelector(".promo-popup-visual");
+  if (visual) {
+    visual.style.backgroundImage = `url("${imageSrc}")`;
   }
   const title = document.getElementById("promo-popup-title");
   if (title && promoPopup.headline) {
     title.textContent = promoPopup.headline;
   }
-
-  popup.querySelectorAll("[data-promo-close]").forEach((node) => {
-    node.addEventListener("click", closePromoPopup);
-  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -258,8 +282,9 @@ function setupPromoPopup(promoPopup) {
 
   window.setTimeout(() => {
     popup.hidden = false;
+    popup.removeAttribute("hidden");
+    popup.classList.add("is-open");
     document.body.classList.add("promo-open");
-    form.elements.name.focus();
   }, 700);
 }
 

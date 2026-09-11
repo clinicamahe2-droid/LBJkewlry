@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260913">
+  <link rel="stylesheet" href="styles.css?v=20260914c">
   <link rel="preload" href="/api/catalog" as="fetch" crossorigin>
 </head>
 <body>
@@ -188,9 +188,11 @@
   <div id="promo-popup" class="promo-popup" hidden>
     <div class="promo-popup-backdrop" data-promo-close></div>
     <div class="promo-popup-card" role="dialog" aria-modal="true" aria-labelledby="promo-popup-title">
-      <button type="button" class="promo-popup-close" data-promo-close aria-label="Fechar">&times;</button>
+      <button type="button" class="promo-popup-close" data-promo-close>Fechar</button>
       <div id="promo-step-form" class="promo-step">
-        <img id="promo-popup-image" class="promo-popup-image" src="" alt="Promoção LB jewelry">
+        <div class="promo-popup-visual">
+          <img id="promo-popup-image" class="promo-popup-image" src="/assets/promo-coupon-setembro.jpg" alt="Mês de Setembro — correntes com 10% de desconto à vista">
+        </div>
         <div class="promo-popup-body">
           <h2 id="promo-popup-title">Ganhe seu cupom</h2>
           <p class="promo-popup-lead">Preencha nome e WhatsApp para liberar o cupom de desconto.</p>
@@ -205,6 +207,7 @@
             </label>
             <p id="promo-popup-error" class="promo-popup-error" hidden></p>
             <button type="submit" class="promo-popup-submit">Liberar cupom</button>
+            <button type="button" class="promo-popup-skip" data-promo-close>Agora não</button>
           </form>
         </div>
       </div>
@@ -247,7 +250,7 @@
     </div>
   </footer>
 
-  <script src="catalog.js?v=20260913"></script>
-  <script src="app.js?v=20260913"></script>
+  <script src="catalog.js?v=20260914c"></script>
+  <script src="app.js?v=20260914c"></script>
 </body>
 </html>

@@ -598,38 +598,71 @@ function collectPromoPopup() {
   };
 }
 
+function formatPhoneDisplay(phone) {
+  const digits = phoneDigits(phone);
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone || "—";
+}
+
+function prospectInitials(name) {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase() || "?";
+}
+
 function renderProspects() {
   const list = document.getElementById("prospect-list");
   const count = document.getElementById("prospects-count");
   if (!list) return;
   const rows = catalog.prospects || [];
   if (count) {
-    count.textContent = rows.length
-      ? `${rows.length} cadastro${rows.length === 1 ? "" : "s"}`
-      : "Nenhum";
+    count.textContent = String(rows.length);
   }
   if (!rows.length) {
-    list.innerHTML = "<p class='panel-hint'>Nenhum prospect cadastrou o cupom ainda.</p>";
+    list.innerHTML = `
+      <div class="prospects-empty">
+        <strong>Nenhum prospect ainda</strong>
+        <p>Os cadastros do pop-up de cupom aparecem aqui.</p>
+      </div>`;
     return;
   }
-  list.innerHTML = rows.map((item) => {
-    const waHref = whatsAppLink(item.phone, `Olá ${item.name}, tudo bem?`);
-    return `
-      <article class="item-card prospect-card">
-        <div class="item-card-body">
-          <h4>${text(item.name)}</h4>
-          <p>
-            <span class="promo-tag">${text(item.couponCode)}</span>
-            · ${formatDate(item.createdAt)}
-            · ${text(item.phone)}
-          </p>
-        </div>
-        <div class="item-card-actions prospect-actions">
-          ${waHref ? `<a href="${waHref}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn">WhatsApp</a>` : ""}
-          <button type="button" data-delete-prospect="${text(item.id)}">Excluir</button>
-        </div>
-      </article>`;
-  }).join("");
+  list.innerHTML = `
+    <div class="prospect-table-head" aria-hidden="true">
+      <span>Cliente</span>
+      <span>WhatsApp</span>
+      <span>Cupom</span>
+      <span>Data</span>
+      <span></span>
+    </div>
+    ${rows.map((item) => {
+      const waHref = whatsAppLink(item.phone, `Olá ${item.name}, vi seu cadastro no cupom ${item.couponCode} da LB jewelry.`);
+      return `
+        <article class="prospect-row">
+          <div class="prospect-identity">
+            <span class="prospect-avatar">${text(prospectInitials(item.name))}</span>
+            <div class="prospect-identity-text">
+              <h4>${text(item.name)}</h4>
+              <p class="prospect-phone-mobile">${text(formatPhoneDisplay(item.phone))}</p>
+            </div>
+          </div>
+          <p class="prospect-phone">${text(formatPhoneDisplay(item.phone))}</p>
+          <p><span class="prospect-coupon">${text(item.couponCode)}</span></p>
+          <p class="prospect-date">${formatShortDate(item.createdAt) || formatDate(item.createdAt)}</p>
+          <div class="prospect-actions">
+            ${waHref ? `<a href="${waHref}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn whatsapp-btn--compact">WhatsApp</a>` : ""}
+            <button type="button" class="prospect-delete" data-delete-prospect="${text(item.id)}">Excluir</button>
+          </div>
+        </article>`;
+    }).join("")}`;
 }
 
 function renderBanners() {
@@ -1267,6 +1300,7 @@ document.querySelectorAll(".admin-tabs button").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".admin-tabs button").forEach((item) => item.classList.remove("is-active"));
     button.classList.add("is-active");
+    button.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     document.querySelectorAll(".tab-panel").forEach((panel) => {
       panel.hidden = panel.id !== `tab-${button.dataset.tab}`;
     });

@@ -78,7 +78,7 @@ function migrateCatalogData(catalog) {
 function defaultPromoPopup() {
   return {
     enabled: true,
-    image: "assets/promo-coupon-setembro.jpg",
+    image: "/assets/promo-coupon-setembro.jpg",
     couponCode: "SETEMBRO10",
     sellerPhone: "08007708540",
     headline: "Ganhe seu cupom de desconto",
@@ -94,9 +94,15 @@ function normalizePhoneDigits(phone) {
   return digits;
 }
 
+function normalizePromoImage(value) {
+  const image = stripTags(value) || defaultPromoPopup().image;
+  if (/^https?:\/\//i.test(image) || image.startsWith("/")) return image;
+  return `/${image}`;
+}
+
 function normalizePromoPopup(input = {}) {
   const enabled = input.enabled !== false;
-  const image = stripTags(input.image) || defaultPromoPopup().image;
+  const image = normalizePromoImage(input.image);
   const couponCode = stripTags(input.couponCode).toUpperCase().replace(/\s+/g, "");
   const sellerPhone = stripTags(input.sellerPhone).replace(/\D/g, "") || defaultPromoPopup().sellerPhone;
   const headline = stripTags(input.headline) || defaultPromoPopup().headline;
