@@ -26,8 +26,6 @@
     const displayPrice = product.priceList || product.priceMax;
     const hasSale = Boolean(product.priceList && product.priceList > product.priceMax);
     const hasRange = product.priceMin !== product.priceMax;
-    const installmentValue = product.priceMax / 10;
-    const giftbackValue = product.priceMax * 0.08;
     const variantLabel = product.categorySlug === "aneis" ? "Numeração" : "Espessura aprox";
     const images = product.images?.length ? product.images : [product.image];
 
@@ -70,9 +68,7 @@
               <span class="pdp-price-current">
                 ${hasRange ? `${formatPrice(product.priceMin)} — ${formatPrice(product.priceMax)}` : formatPrice(displayPrice)}
               </span>
-              <p class="pdp-installment">10x sem juros de <strong>${formatPrice(installmentValue)}</strong></p>
-              <p class="pdp-giftback">Ganhe ${formatPrice(giftbackValue)} em GIFTBACK</p>
-            ${Number(product.stock) <= 0 ? `<p class="pdp-installment">Peça indisponível no momento.</p>` : ""}
+              ${Number(product.stock) <= 0 ? `<p class="pdp-stock-note">Peça indisponível no momento.</p>` : ""}
             </div>
 
             <div class="pdp-variant">

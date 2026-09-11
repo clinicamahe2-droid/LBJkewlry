@@ -1369,14 +1369,10 @@ button {
   color: var(--text-dark);
 }
 
-.pdp-installment,
-.pdp-giftback {
+.pdp-stock-note {
   font-size: 0.8125rem;
   color: var(--text-dark-muted);
-}
-
-.pdp-giftback {
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
 }
 
 .pdp-variant {
