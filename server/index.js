@@ -112,7 +112,7 @@ function makeUploader({ allowVideo, maxBytes }) {
 }
 
 const uploadImage = makeUploader({ allowVideo: false, maxBytes: 5 * 1024 * 1024 });
-const uploadBanner = makeUploader({ allowVideo: true, maxBytes: 80 * 1024 * 1024 });
+const uploadBanner = makeUploader({ allowVideo: true, maxBytes: storage.getMaxBannerVideoBytes() });
 
 const loginAttempts = new Map();
 
@@ -352,7 +352,7 @@ async function createApp() {
         return;
       }
       const allowVideo = req.query.media === "banner";
-      const maxBytes = allowVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
+      const maxBytes = allowVideo ? storage.getMaxBannerVideoBytes() : 5 * 1024 * 1024;
       const payload = await storage.createSignedUpload({
         originalName: req.body?.filename,
         mimetype: req.body?.contentType,
@@ -368,14 +368,16 @@ async function createApp() {
 
   app.post("/api/admin/upload", requireAdmin, (req, res) => {
     const allowVideo = req.query.media === "banner";
-    const maxBytes = allowVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxBytes = allowVideo ? storage.getMaxBannerVideoBytes() : 5 * 1024 * 1024;
     const uploader = allowVideo ? uploadBanner : uploadImage;
     uploader.single("file")(req, res, async (error) => {
       if (error) {
         const tooBig = error.code === "LIMIT_FILE_SIZE";
         res.status(400).json({
           error: tooBig
-            ? (allowVideo ? "Arquivo pode ter no máximo 80 MB." : "Imagem pode ter no máximo 5 MB.")
+            ? (allowVideo
+              ? `Vídeo grande demais. Máximo ${storage.getMaxBannerVideoLabel()}.`
+              : "Imagem pode ter no máximo 5 MB.")
             : error.message
         });
         return;

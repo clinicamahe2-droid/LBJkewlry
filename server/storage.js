@@ -5,6 +5,17 @@ const { getSupabase, useSupabase } = require("./supabase");
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "media";
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+const DEFAULT_MAX_BANNER_VIDEO_MB = 50;
+
+function getMaxBannerVideoBytes() {
+  const fromEnv = Number(process.env.MAX_BANNER_VIDEO_MB);
+  const maxMb = Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_MAX_BANNER_VIDEO_MB;
+  return Math.floor(maxMb * 1024 * 1024);
+}
+
+function getMaxBannerVideoLabel() {
+  return `${Math.round(getMaxBannerVideoBytes() / (1024 * 1024))} MB`;
+}
 
 function canUseStorage() {
   return useSupabase();
@@ -45,7 +56,11 @@ function validateUpload({ mimetype, size, allowVideo, maxBytes }) {
     throw new Error(allowVideo ? "Envie JPG, PNG, WEBP, MP4 ou WEBM." : "Envie apenas JPG, PNG ou WEBP.");
   }
   if (size > maxBytes) {
-    throw new Error(allowVideo ? "Arquivo pode ter no máximo 80 MB." : "Imagem pode ter no máximo 5 MB.");
+    throw new Error(
+      allowVideo
+        ? `Vídeo grande demais. Máximo ${Math.round(maxBytes / (1024 * 1024))} MB. Comprima o MP4 (720p) e tente de novo.`
+        : "Imagem pode ter no máximo 5 MB."
+    );
   }
 }
 
@@ -66,17 +81,26 @@ function mediaType(mimetype) {
 
 async function ensureBucket() {
   const supabase = getSupabase();
+  const fileSizeLimit = getMaxBannerVideoBytes();
   const { data, error } = await supabase.storage.listBuckets();
   if (error) throw error;
-  if ((data || []).some((bucket) => bucket.id === BUCKET || bucket.name === BUCKET)) {
+  const exists = (data || []).some((bucket) => bucket.id === BUCKET || bucket.name === BUCKET);
+  if (!exists) {
+    const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+      public: true,
+      fileSizeLimit
+    });
+    if (createError && !/already exists/i.test(createError.message)) {
+      throw createError;
+    }
     return;
   }
-  const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+  const { error: updateError } = await supabase.storage.updateBucket(BUCKET, {
     public: true,
-    fileSizeLimit: 80 * 1024 * 1024
+    fileSizeLimit
   });
-  if (createError && !/already exists/i.test(createError.message)) {
-    throw createError;
+  if (updateError && !/already exists/i.test(updateError.message)) {
+    throw updateError;
   }
 }
 
@@ -121,5 +145,7 @@ async function uploadBuffer({ buffer, originalName, mimetype, allowVideo, maxByt
 module.exports = {
   canUseStorage,
   createSignedUpload,
-  uploadBuffer
+  uploadBuffer,
+  getMaxBannerVideoBytes,
+  getMaxBannerVideoLabel
 };

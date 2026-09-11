@@ -524,9 +524,13 @@ function renderBanners() {
         <label>Título<input type="text" data-field="title" value="${text(banner.title || "")}"></label>
         <input type="hidden" data-field="image" value="${text(banner.image || "")}">
         <input type="hidden" data-field="video" value="${text(banner.video || "")}">
+        <label>Link do arquivo (opcional)
+          <input type="text" data-field="media-url" value="${text(banner.type === "video" ? banner.video : banner.image)}" placeholder="assets/uploads/arquivo.mp4 ou https://...">
+        </label>
         <label class="file-label">Trocar arquivo
           <input type="file" data-upload accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
         </label>
+        <p class="panel-hint banner-file-hint">Vídeos: até 50 MB. Se o vídeo atual já funciona na loja, não precisa reenviar — só clique em Salvar banners.</p>
       </div>
       <div class="row-actions">
         <button type="button" data-move="up">Subir</button>
@@ -978,6 +982,27 @@ function openProduct(product) {
   productDialog.showModal();
 }
 
+const MAX_BANNER_VIDEO_BYTES = 50 * 1024 * 1024;
+
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+}
+
+function uploadSizeError(file, maxBytes = MAX_BANNER_VIDEO_BYTES) {
+  return `Arquivo ${formatFileSize(file.size)}. Máximo ${formatFileSize(maxBytes)}. Comprima o MP4 (720p) ou envie só o link abaixo.`;
+}
+
+function parseStorageError(raw) {
+  const message = String(raw || "");
+  if (/maximum allowed size|payload too large|entity too large/i.test(message)) {
+    return `Vídeo grande demais para o storage (máx. ${formatFileSize(MAX_BANNER_VIDEO_BYTES)}). Comprima o MP4 ou cole o link do vídeo no campo abaixo.`;
+  }
+  return message;
+}
+
 function guessUploadMime(file) {
   const name = String(file.name || "").toLowerCase();
   if (file.type && file.type !== "application/octet-stream") return file.type;
@@ -992,6 +1017,9 @@ function guessUploadMime(file) {
 
 async function uploadFile(file, { banner = false } = {}) {
   const contentType = guessUploadMime(file);
+  if (banner && contentType.startsWith("video/") && file.size > MAX_BANNER_VIDEO_BYTES) {
+    throw new Error(uploadSizeError(file));
+  }
   const uploadUrlEndpoint = banner ? "/api/admin/upload-url?media=banner" : "/api/admin/upload-url";
   const signedResponse = await fetch(uploadUrlEndpoint, {
     method: "POST",
@@ -1015,7 +1043,8 @@ async function uploadFile(file, { banner = false } = {}) {
       body: file
     });
     if (!putResponse.ok) {
-      throw new Error("Falha no envio do arquivo para o storage.");
+      const raw = await putResponse.text().catch(() => "");
+      throw new Error(parseStorageError(raw) || "Falha no envio do arquivo para o storage.");
     }
     return { url: signedData.url, mediaType: signedData.mediaType };
   }
@@ -1539,6 +1568,24 @@ bannerList.addEventListener("change", async (event) => {
     }
     catalog.banners = collectBanners();
     renderBanners();
+    return;
+  }
+
+  if (event.target.matches('[data-field="media-url"]')) {
+    const url = event.target.value.trim();
+    const type = card.querySelector('[data-field="type"]').value;
+    if (type === "video") {
+      card.querySelector('[data-field="video"]').value = url;
+      card.querySelector('[data-field="image"]').value = "";
+    } else {
+      card.querySelector('[data-field="image"]').value = url;
+      card.querySelector('[data-field="video"]').value = "";
+    }
+    card.querySelector(".banner-preview").innerHTML = bannerMedia({
+      type,
+      video: type === "video" ? url : "",
+      image: type === "image" ? url : ""
+    });
     return;
   }
 

@@ -74,7 +74,7 @@ create table if not exists fiado (
 
 -- Storage público para fotos e vídeos enviados pelo admin
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('media', 'media', true, 83886080)
+values ('media', 'media', true, 52428800)
 on conflict (id) do update
 set public = excluded.public,
     file_size_limit = excluded.file_size_limit;
