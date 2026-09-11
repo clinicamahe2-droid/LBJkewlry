@@ -13,7 +13,7 @@ if (IS_SERVERLESS && !process.env.DATA_DIR) {
 }
 
 const express = require("express");
-const session = require("express-session");
+const cookieSession = require("cookie-session");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const store = require("./store");
@@ -28,6 +28,14 @@ fs.mkdirSync(store.DATA_DIR, { recursive: true });
 
 function randomSecret() {
   return crypto.randomBytes(32).toString("hex");
+}
+
+function sessionSecret() {
+  const secret = process.env.SESSION_SECRET;
+  if (IS_SERVERLESS && !secret) {
+    throw new Error("SESSION_SECRET é obrigatório na Vercel.");
+  }
+  return secret || randomSecret();
 }
 
 function loadEnvFile() {
@@ -142,20 +150,14 @@ async function createApp() {
     app.set("trust proxy", 1);
   }
   app.use(express.json({ limit: "1mb" }));
-  app.use(
-    session({
-      name: "lb.sid",
-      secret: process.env.SESSION_SECRET || randomSecret(),
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: IS_SERVERLESS,
-        maxAge: 8 * 60 * 60 * 1000
-      }
-    })
-  );
+  app.use(cookieSession({
+    name: "lb.sid",
+    keys: [sessionSecret()],
+    maxAge: 8 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: IS_SERVERLESS,
+    sameSite: "lax"
+  }));
 
   app.get("/api/catalog", async (_req, res) => {
     try {
@@ -195,10 +197,8 @@ async function createApp() {
   });
 
   app.post("/api/admin/logout", (req, res) => {
-    req.session.destroy(() => {
-      res.clearCookie("lb.sid");
-      res.json({ ok: true });
-    });
+    req.session = null;
+    res.json({ ok: true });
   });
 
   app.get("/api/admin/me", (req, res) => {

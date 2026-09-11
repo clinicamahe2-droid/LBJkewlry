@@ -274,6 +274,11 @@ async function saveClient(input, existingId) {
         ? { ...entry, clientName: client.name, clientPhone: client.phone }
         : entry
     ));
+    catalog.sales = catalog.sales.map((sale) => (
+      sale.clientId === client.id
+        ? { ...sale, clientName: client.name }
+        : sale
+    ));
   } else {
     catalog.clients.push(client);
   }

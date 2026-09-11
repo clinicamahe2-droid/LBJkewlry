@@ -173,13 +173,19 @@ function openClientById(clientId) {
   openClient(catalog.clients.find((item) => item.id === clientId));
 }
 
-function renderFiadoPayments(payments) {
+function renderFiadoPayments(payments, fiadoId) {
   if (!payments?.length) return "";
   const items = [...payments].reverse().map((pay) => `
-    <li>
-      <span>${formatDate(pay.paidAt)}</span>
-      <strong>${money(pay.amount)}</strong>
-      ${pay.note ? `<em>${text(pay.note)}</em>` : ""}
+    <li class="fiado-payment-item">
+      <div class="fiado-payment-item-main">
+        <span>${formatDate(pay.paidAt)}</span>
+        <strong>${money(pay.amount)}</strong>
+        ${pay.note ? `<em>${text(pay.note)}</em>` : ""}
+      </div>
+      <div class="fiado-payment-item-actions">
+        <button type="button" data-edit-payment="${text(pay.id)}" data-fiado-id="${text(fiadoId)}">Editar</button>
+        <button type="button" data-delete-payment="${text(pay.id)}" data-fiado-id="${text(fiadoId)}">Excluir</button>
+      </div>
     </li>
   `).join("");
   return `
@@ -240,7 +246,7 @@ function renderFiadoCard(entry) {
           </div>` : ""}
         </dl>
         ${entry.notes ? `<p class="fiado-notes">${text(entry.notes)}</p>` : ""}
-        ${renderFiadoPayments(payments)}
+        ${renderFiadoPayments(payments, entry.id)}
       </div>
       <div class="fiado-actions">
         <button type="button" data-edit-fiado="${text(entry.id)}">Editar fiado</button>
@@ -251,14 +257,25 @@ function renderFiadoCard(entry) {
     </article>`;
 }
 
-function isCashSale(sale) {
-  return !sale.type || sale.type === "cash" || sale.type === "fiado_payment";
+function isSalesListRow(sale) {
+  return !sale.type || sale.type === "cash" || sale.type === "fiado" || sale.type === "fiado_payment";
+}
+
+function saleRevenueAmount(sale) {
+  if (sale.type === "fiado") return Number(sale.paidAtSale || 0);
+  return Number(sale.total || 0);
+}
+
+function resolveSaleClient(sale) {
+  if (!sale.clientId) return sale.clientName || "";
+  const client = catalog.clients.find((item) => item.id === sale.clientId);
+  return client?.name || sale.clientName || "";
 }
 
 function saleLabel(sale) {
   if (sale.type === "fiado") return "Fiado";
   if (sale.type === "fiado_payment") return "Abatimento";
-  return "";
+  return "À vista";
 }
 
 function text(value) {
@@ -596,7 +613,7 @@ function saleMatchesPeriod(sale) {
 
 function filteredSales() {
   return (catalog.sales || []).filter((sale) => {
-    if (!isCashSale(sale)) return false;
+    if (!isSalesListRow(sale)) return false;
     if (!saleMatchesPeriod(sale)) return false;
     if (salesFilter.category === "all") return true;
     const product = catalog.products.find((item) => item.id === sale.productId);
@@ -625,7 +642,7 @@ function renderSalesFilters() {
 function renderSales() {
   renderSalesFilters();
   const rows = filteredSales();
-  const total = rows.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const total = rows.reduce((sum, item) => sum + saleRevenueAmount(item), 0);
   const units = rows.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const ticket = rows.length ? total / rows.length : 0;
   document.getElementById("sales-summary").innerHTML = `
@@ -647,14 +664,17 @@ function renderSales() {
     <div class="item-list">
       ${rows.map((item) => {
         const badge = saleLabel(item);
+        const clientName = resolveSaleClient(item);
+        const amount = saleRevenueAmount(item);
         return `
-        <article class="item-card sale-card">
+        <article class="item-card sale-card sale-card--${text(item.type || "cash")}">
           <div class="item-card-body">
-            ${badge ? `<span class="sale-badge">${badge}</span>` : ""}
-            <h4>${text(item.productName || item.clientName || "Recebimento")}</h4>
-            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${item.clientName && item.type === "fiado_payment" ? ` · ${text(item.clientName)}` : ""}</p>
+            <span class="sale-badge">${badge}</span>
+            <h4>${text(item.productName || "Recebimento")}</h4>
+            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${clientName ? ` · Cliente: <strong>${text(clientName)}</strong>` : ""}</p>
+            ${item.type === "fiado" && Number(item.total || 0) > amount ? `<p class="sale-meta">Total da venda: ${money(item.total)} · Entrada: ${money(amount)}</p>` : ""}
           </div>
-          <strong class="sale-total">${money(item.total)}</strong>
+          <strong class="sale-total">${money(amount)}</strong>
         </article>`;
       }).join("")}
     </div>` : "<p class='panel-hint'>Nenhuma venda neste filtro.</p>";
@@ -799,11 +819,58 @@ function openClient(client) {
   document.getElementById("client-dialog").showModal();
 }
 
+function fiadoPayloadFromEntry(entry, payments) {
+  return {
+    quantity: entry.quantity,
+    unitPrice: entry.unitPrice,
+    installmentAmount: entry.installmentAmount ?? 0,
+    nextDueDate: entry.nextDueDate || "",
+    notes: entry.notes || "",
+    payments
+  };
+}
+
+async function persistFiadoPayments(entry, payments) {
+  return request(`/api/admin/fiado/${entry.id}`, {
+    method: "PUT",
+    body: JSON.stringify(fiadoPayloadFromEntry(entry, payments))
+  });
+}
+
 function openPayment(entry) {
   const form = document.getElementById("payment-form");
   form.reset();
   showError(document.getElementById("payment-error"), "");
+  document.getElementById("payment-dialog-title").textContent = "Registrar abatimento";
+  document.getElementById("payment-submit-btn").textContent = "Confirmar abatimento";
+  document.getElementById("payment-paid-at-wrap").hidden = true;
+  document.getElementById("payment-next-due-wrap").hidden = false;
   form.elements.fiadoId.value = entry.id;
+  form.elements.paymentId.value = "";
+  form.elements.nextDueDate.value = entry.nextDueDate || "";
+  document.getElementById("payment-summary").innerHTML = `
+    <span class="payment-summary-label">Cliente</span>
+    <strong>${text(entry.clientName)}</strong>
+    <span class="payment-summary-label">Produto</span>
+    <span>${text(entry.productName)}</span>
+    <span class="payment-summary-label">Saldo atual</span>
+    <strong class="payment-summary-balance">${money(entry.balance)}</strong>`;
+  document.getElementById("payment-dialog").showModal();
+}
+
+function openPaymentEdit(entry, payment) {
+  const form = document.getElementById("payment-form");
+  form.reset();
+  showError(document.getElementById("payment-error"), "");
+  document.getElementById("payment-dialog-title").textContent = "Editar abatimento";
+  document.getElementById("payment-submit-btn").textContent = "Salvar abatimento";
+  document.getElementById("payment-paid-at-wrap").hidden = false;
+  document.getElementById("payment-next-due-wrap").hidden = false;
+  form.elements.fiadoId.value = entry.id;
+  form.elements.paymentId.value = payment.id;
+  form.elements.paidAt.value = payment.paidAt ? String(payment.paidAt).slice(0, 10) : "";
+  form.elements.amount.value = Number(payment.amount || 0);
+  form.elements.note.value = payment.note || "";
   form.elements.nextDueDate.value = entry.nextDueDate || "";
   document.getElementById("payment-summary").innerHTML = `
     <span class="payment-summary-label">Cliente</span>
@@ -911,7 +978,20 @@ function openProduct(product) {
   productDialog.showModal();
 }
 
+function guessUploadMime(file) {
+  const name = String(file.name || "").toLowerCase();
+  if (file.type && file.type !== "application/octet-stream") return file.type;
+  if (name.endsWith(".mp4")) return "video/mp4";
+  if (name.endsWith(".webm")) return "video/webm";
+  if (name.endsWith(".mov")) return "video/quicktime";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".webp")) return "image/webp";
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  return file.type || "application/octet-stream";
+}
+
 async function uploadFile(file, { banner = false } = {}) {
+  const contentType = guessUploadMime(file);
   const uploadUrlEndpoint = banner ? "/api/admin/upload-url?media=banner" : "/api/admin/upload-url";
   const signedResponse = await fetch(uploadUrlEndpoint, {
     method: "POST",
@@ -919,15 +999,19 @@ async function uploadFile(file, { banner = false } = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       filename: file.name,
-      contentType: file.type,
+      contentType,
       size: file.size
     })
   });
   const signedData = await signedResponse.json().catch(() => ({}));
+  if (signedResponse.status === 401) {
+    showLogin();
+    throw new Error("Sessão expirada. Entre novamente e repita o envio.");
+  }
   if (signedResponse.ok && signedData.uploadUrl) {
     const putResponse = await fetch(signedData.uploadUrl, {
       method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
+      headers: { "Content-Type": contentType },
       body: file
     });
     if (!putResponse.ok) {
@@ -1201,7 +1285,30 @@ document.getElementById("fiado-alerts").addEventListener("click", (event) => {
   }
 });
 
-document.getElementById("fiado-list").addEventListener("click", (event) => {
+document.getElementById("fiado-list").addEventListener("click", async (event) => {
+  const editPaymentBtn = event.target.closest("[data-edit-payment]");
+  if (editPaymentBtn) {
+    const entry = catalog.fiado.find((item) => item.id === editPaymentBtn.dataset.fiadoId);
+    const payment = entry?.payments?.find((item) => item.id === editPaymentBtn.dataset.editPayment);
+    if (entry && payment) openPaymentEdit(entry, payment);
+    return;
+  }
+
+  const deletePaymentBtn = event.target.closest("[data-delete-payment]");
+  if (deletePaymentBtn) {
+    const entry = catalog.fiado.find((item) => item.id === deletePaymentBtn.dataset.fiadoId);
+    if (!entry) return;
+    if (!window.confirm("Excluir este abatimento? O saldo será recalculado.")) return;
+    const payments = (entry.payments || []).filter((item) => item.id !== deletePaymentBtn.dataset.deletePayment);
+    try {
+      await persistFiadoPayments(entry, payments);
+      await loadCatalog();
+    } catch (error) {
+      showError(document.getElementById("fiado-error"), error.message);
+    }
+    return;
+  }
+
   const editFiadoId = event.target.closest("[data-edit-fiado]")?.dataset.editFiado;
   if (editFiadoId) {
     const entry = catalog.fiado.find((item) => item.id === editFiadoId);
@@ -1225,14 +1332,33 @@ document.getElementById("payment-form").addEventListener("submit", async (event)
   showError(paymentError, "");
   const payload = Object.fromEntries(new FormData(event.target).entries());
   try {
-    await request(`/api/admin/fiado/${payload.fiadoId}/payments`, {
-      method: "POST",
-      body: JSON.stringify({
-        amount: Number(payload.amount),
-        nextDueDate: payload.nextDueDate,
-        note: payload.note
-      })
-    });
+    if (payload.paymentId) {
+      const entry = catalog.fiado.find((item) => item.id === payload.fiadoId);
+      if (!entry) throw new Error("Fiado não encontrado.");
+      const payments = (entry.payments || []).map((pay) => (
+        pay.id === payload.paymentId
+          ? {
+            ...pay,
+            amount: Number(payload.amount),
+            paidAt: payload.paidAt,
+            note: payload.note
+          }
+          : pay
+      ));
+      await persistFiadoPayments(
+        { ...entry, nextDueDate: payload.nextDueDate || entry.nextDueDate },
+        payments
+      );
+    } else {
+      await request(`/api/admin/fiado/${payload.fiadoId}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: Number(payload.amount),
+          nextDueDate: payload.nextDueDate,
+          note: payload.note
+        })
+      });
+    }
     document.getElementById("payment-dialog").close();
     await loadCatalog();
   } catch (error) {

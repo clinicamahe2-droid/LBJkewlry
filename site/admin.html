@@ -2,14 +2,14 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Painel | LB jewelry</title>
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260911g">
+  <link rel="stylesheet" href="admin.css?v=20260911j">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -261,16 +261,18 @@
 
   <dialog id="payment-dialog">
     <form id="payment-form" method="dialog">
-      <h2>Registrar abatimento</h2>
+      <h2 id="payment-dialog-title">Registrar abatimento</h2>
       <input type="hidden" name="fiadoId">
+      <input type="hidden" name="paymentId">
       <p id="payment-summary" class="panel-hint"></p>
+      <label id="payment-paid-at-wrap" hidden>Data do pagamento<input type="date" name="paidAt"></label>
       <label>Valor recebido<input type="number" name="amount" min="0.01" step="0.01" required></label>
-      <label>Próximo vencimento<input type="date" name="nextDueDate"></label>
+      <label id="payment-next-due-wrap">Próximo vencimento<input type="date" name="nextDueDate"></label>
       <label>Observação<input type="text" name="note" placeholder="Ex.: PIX, dinheiro"></label>
       <p id="payment-error" class="form-error" hidden></p>
       <div class="dialog-actions">
         <button type="button" id="cancel-payment">Cancelar</button>
-        <button type="submit" class="primary">Confirmar abatimento</button>
+        <button type="submit" id="payment-submit-btn" class="primary">Confirmar abatimento</button>
       </div>
     </form>
   </dialog>
@@ -335,6 +337,6 @@
     </form>
   </dialog>
 
-  <script src="admin.js?v=20260911g"></script>
+  <script src="admin.js?v=20260911j"></script>
 </body>
 </html>

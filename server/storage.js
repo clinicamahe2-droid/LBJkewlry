@@ -21,6 +21,24 @@ function guessExtension(originalName, mimetype) {
   return ".mp4";
 }
 
+function resolveMimetype(mimetype, originalName) {
+  const cleanType = String(mimetype || "").trim().toLowerCase();
+  if (cleanType && cleanType !== "application/octet-stream") {
+    return cleanType;
+  }
+  const ext = path.extname(originalName || "").toLowerCase();
+  const byExt = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime"
+  };
+  return byExt[ext] || cleanType || "application/octet-stream";
+}
+
 function validateUpload({ mimetype, size, allowVideo, maxBytes }) {
   const allowed = new Set(allowVideo ? [...IMAGE_TYPES, ...VIDEO_TYPES] : [...IMAGE_TYPES]);
   if (!allowed.has(mimetype)) {
@@ -63,6 +81,7 @@ async function ensureBucket() {
 }
 
 async function createSignedUpload({ originalName, mimetype, size, allowVideo, maxBytes }) {
+  mimetype = resolveMimetype(mimetype, originalName);
   validateUpload({ mimetype, size, allowVideo, maxBytes });
   const supabase = getSupabase();
   if (!supabase) {
