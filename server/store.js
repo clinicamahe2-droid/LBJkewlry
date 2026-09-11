@@ -269,6 +269,11 @@ async function saveClient(input, existingId) {
       throw new Error("Cliente não encontrado.");
     }
     catalog.clients[index] = client;
+    catalog.fiado = catalog.fiado.map((entry) => (
+      entry.clientId === client.id
+        ? { ...entry, clientName: client.name, clientPhone: client.phone }
+        : entry
+    ));
   } else {
     catalog.clients.push(client);
   }

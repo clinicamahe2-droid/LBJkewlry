@@ -128,16 +128,18 @@ function getCollectionAlerts() {
 }
 
 function renderAlertItem(entry, tone) {
+  const client = resolveFiadoClient(entry);
+  const entryForContact = { ...entry, clientName: client.name, clientPhone: client.phone };
   return `
     <li class="fiado-alert-item is-${tone}">
       <div class="fiado-alert-copy">
-        <strong>${text(entry.clientName)}</strong>
+        <strong>${text(client.name)}</strong>
         <span>${text(entry.productName)}</span>
         <span class="fiado-alert-balance">Saldo ${money(entry.balance)} · Venc. ${formatDate(entry.nextDueDate)}</span>
       </div>
       <div class="fiado-alert-actions">
         ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar</button>` : ""}
-        ${renderWhatsAppButton(entry, "whatsapp-btn--compact")}
+        ${renderWhatsAppButton(entryForContact, "whatsapp-btn--compact")}
       </div>
     </li>`;
 }
@@ -187,8 +189,18 @@ function renderFiadoPayments(payments) {
     </details>`;
 }
 
+function resolveFiadoClient(entry) {
+  const client = catalog.clients.find((item) => item.id === entry.clientId);
+  return {
+    name: client?.name || entry.clientName,
+    phone: client?.phone || entry.clientPhone
+  };
+}
+
 function renderFiadoCard(entry) {
   const payments = entry.payments || [];
+  const client = resolveFiadoClient(entry);
+  const entryForContact = { ...entry, clientName: client.name, clientPhone: client.phone };
   return `
     <article class="item-card fiado-card is-${text(entry.status)}">
       <div class="fiado-card-main">
@@ -199,8 +211,8 @@ function renderFiadoCard(entry) {
         <div class="fiado-card-info">
           <div class="fiado-card-block">
             <span class="fiado-card-label">Cliente</span>
-            <strong>${text(entry.clientName)}</strong>
-            ${entry.clientPhone ? `<span class="fiado-card-sub">${text(entry.clientPhone)}</span>` : ""}
+            <strong>${text(client.name)}</strong>
+            ${client.phone ? `<span class="fiado-card-sub">${text(client.phone)}</span>` : ""}
           </div>
           <div class="fiado-card-block">
             <span class="fiado-card-label">Produto</span>
@@ -232,7 +244,7 @@ function renderFiadoCard(entry) {
       </div>
       <div class="fiado-actions">
         ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar cliente</button>` : ""}
-        ${entry.status !== "paid" ? renderWhatsAppButton(entry) : ""}
+        ${entry.status !== "paid" ? renderWhatsAppButton(entryForContact) : ""}
         ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
       </div>
     </article>`;
