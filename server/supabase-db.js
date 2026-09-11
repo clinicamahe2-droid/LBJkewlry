@@ -61,12 +61,13 @@ function bannerToRow(banner, index) {
 }
 
 function bannerFromRow(row) {
+  const type = row.type || "image";
   return {
     id: row.id,
-    type: row.type || "image",
+    type,
     title: row.title || "",
     alt: row.alt || "",
-    image: row.image || "",
+    image: type === "video" ? "" : (row.image || ""),
     video: row.video || ""
   };
 }

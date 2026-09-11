@@ -14,7 +14,13 @@
       ]
     },
     {
-      "source": "/(.*\\.(css|js|webp|png|jpg|jpeg|mp4|webm))",
+      "source": "/(app|catalog|admin|produto)\\.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*\\.(css|webp|png|jpg|jpeg|mp4|webm))",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]

@@ -539,6 +539,20 @@ button {
   position: relative;
   overflow: hidden;
   background: var(--deep-black);
+  min-height: min(52vw, 520px);
+}
+
+.hero.is-loading .hero-track,
+.hero.is-loading .hero-dots {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.hero.is-ready .hero-track,
+.hero.is-ready .hero-dots {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease;
 }
 
 .hero-track {

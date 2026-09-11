@@ -97,7 +97,11 @@ async function loadCatalog() {
       await saveCatalogToSupabase(seeded);
       return seeded;
     }
-    return migrateCatalogData(catalog).catalog;
+    const migrated = migrateCatalogData(catalog).catalog;
+    migrated.banners = migrated.banners.map((banner) => (
+      banner.type === "video" ? { ...banner, image: "" } : banner
+    ));
+    return migrated;
   }
 
   ensureDir(DATA_DIR);

@@ -1,3 +1,4 @@
+const heroSection = document.querySelector(".hero");
 const heroTrack = document.querySelector(".hero-track");
 const heroDots = document.querySelector(".hero-dots");
 const track = document.querySelector(".chain-types-track");
@@ -14,6 +15,26 @@ function dedupeBanners(banners) {
     seen.set(key, banner);
   }
   return [...seen.values()];
+}
+
+function prepareBanners(banners) {
+  return dedupeBanners(banners || [])
+    .map((banner) => {
+      if (banner.type === "video" && banner.video) {
+        return { ...banner, image: "" };
+      }
+      return banner;
+    })
+    .sort((a, b) => {
+      if (a.type === "video" && b.type !== "video") return -1;
+      if (b.type === "video" && a.type !== "video") return 1;
+      return 0;
+    });
+}
+
+function revealHero() {
+  heroSection?.classList.remove("is-loading");
+  heroSection?.classList.add("is-ready");
 }
 
 function bindHeroVideo(video) {
@@ -59,8 +80,11 @@ function goToSlide(index, total) {
 }
 
 function setupHero(banners) {
-  const slides = dedupeBanners(banners || []);
+  const slides = prepareBanners(banners);
   if (!heroTrack || !heroDots || !slides.length) return;
+
+  heroSection?.classList.add("is-loading");
+  heroSection?.classList.remove("is-ready");
 
   heroTrack.innerHTML = slides.map((banner, index) => {
     const label = escapeHtml(banner.alt || banner.title || "Banner");
@@ -91,6 +115,19 @@ function setupHero(banners) {
   });
 
   goToSlide(0, total);
+
+  const firstVideo = heroTrack.querySelector(".hero-slide:first-child .hero-video");
+  if (firstVideo) {
+    const done = () => revealHero();
+    if (firstVideo.classList.contains("is-ready")) {
+      done();
+    } else {
+      firstVideo.addEventListener("canplay", done, { once: true });
+      setTimeout(done, 6000);
+    }
+  } else {
+    revealHero();
+  }
 }
 
 function renderShelves(products) {
