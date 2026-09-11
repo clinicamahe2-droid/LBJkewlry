@@ -17,15 +17,19 @@ const CATEGORIES = [
   { slug: "aneis", label: "Anéis" }
 ];
 
-let catalog = { products: [], banners: [], sales: [] };
+let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [] };
 let productImages = [];
 const listFilter = {
   products: { category: "all", lowStock: false, homeOnly: false, out: false },
   stock: { category: "all", lowStock: false, homeOnly: false, out: false }
 };
 const salesFilter = { period: "month", category: "all" };
+const fiadoFilter = { status: "all" };
+let salesMode = "cash";
+let clientSearchQuery = "";
 let stockFocusId = null;
 let lastSaleProductId = "";
+let lastFiadoProductId = "";
 
 async function request(url, options = {}) {
   let response;
@@ -62,6 +66,23 @@ function showLogin() {
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("pt-BR");
+}
+
+function isCashSale(sale) {
+  return !sale.type || sale.type === "cash" || sale.type === "fiado_payment";
+}
+
+function saleLabel(sale) {
+  if (sale.type === "fiado") return "Fiado";
+  if (sale.type === "fiado_payment") return "Abatimento";
+  return "";
 }
 
 function text(value) {
@@ -399,6 +420,7 @@ function saleMatchesPeriod(sale) {
 
 function filteredSales() {
   return (catalog.sales || []).filter((sale) => {
+    if (!isCashSale(sale)) return false;
     if (!saleMatchesPeriod(sale)) return false;
     if (salesFilter.category === "all") return true;
     const product = catalog.products.find((item) => item.id === sale.productId);
@@ -447,25 +469,211 @@ function renderSales() {
   fillSaleProducts(lastSaleProductId);
   document.getElementById("sales-list").innerHTML = rows.length ? `
     <div class="item-list">
-      ${rows.map((item) => `
+      ${rows.map((item) => {
+        const badge = saleLabel(item);
+        return `
         <article class="item-card sale-card">
           <div class="item-card-body">
-            <h4>${text(item.productName)}</h4>
-            <p>${new Date(item.createdAt).toLocaleString("pt-BR")} · ${item.quantity} un.</p>
+            ${badge ? `<span class="sale-badge">${badge}</span>` : ""}
+            <h4>${text(item.productName || item.clientName || "Recebimento")}</h4>
+            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${item.clientName && item.type === "fiado_payment" ? ` · ${text(item.clientName)}` : ""}</p>
           </div>
           <strong class="sale-total">${money(item.total)}</strong>
-        </article>
-      `).join("")}
+        </article>`;
+      }).join("")}
     </div>` : "<p class='panel-hint'>Nenhuma venda neste filtro.</p>";
+}
+
+function fillFiadoProducts(selectedId) {
+  const select = document.querySelector("#fiado-form [name='productId']");
+  const category = document.getElementById("fiado-category").value || "all";
+  const rows = filterItems("", { category });
+  const groups = groupByCategory(rows);
+  select.innerHTML = groups.map((group) => `
+    <optgroup label="${group.label}">
+      ${group.items.map((item) => `
+        <option value="${text(item.id)}" data-price="${item.priceMin}" ${item.id === selectedId ? "selected" : ""}>
+          ${text(item.name)} (${item.stock} un.)
+        </option>
+      `).join("")}
+    </optgroup>
+  `).join("") || `<option value="">Nenhuma peça nesta categoria</option>`;
+
+  const chosen = select.selectedOptions[0];
+  if (chosen?.dataset.price) {
+    document.querySelector("#fiado-form [name='unitPrice']").value = chosen.dataset.price;
+  }
+}
+
+function fillClientSelects() {
+  const options = (catalog.clients || [])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+    .map((client) => `<option value="${text(client.id)}">${text(client.name)} · ${text(client.phone)}</option>`)
+    .join("");
+  const fiadoSelect = document.querySelector("#fiado-form [name='clientId']");
+  if (fiadoSelect) {
+    fiadoSelect.innerHTML = options || `<option value="">Cadastre um cliente</option>`;
+  }
+}
+
+function filteredClients() {
+  const query = clientSearchQuery.trim().toLowerCase();
+  return (catalog.clients || []).filter((client) => {
+    if (!query) return true;
+    return `${client.name} ${client.phone} ${client.notes || ""}`.toLowerCase().includes(query);
+  });
+}
+
+function filteredFiado() {
+  return (catalog.fiado || []).filter((entry) => {
+    if (fiadoFilter.status === "all") return true;
+    return entry.status === fiadoFilter.status;
+  });
+}
+
+function fiadoStatusLabel(status) {
+  if (status === "paid") return "Quitado";
+  if (status === "overdue") return "Vencido";
+  return "Em aberto";
+}
+
+function renderClients() {
+  const rows = filteredClients();
+  const list = document.getElementById("client-list");
+  if (!list) return;
+  list.innerHTML = rows.length ? rows.map((client) => {
+    const openCount = (catalog.fiado || []).filter((item) => item.clientId === client.id && item.status !== "paid").length;
+    return `
+      <article class="item-card">
+        <div class="item-card-body">
+          <h4>${text(client.name)}</h4>
+          <p>${text(client.phone)}${openCount ? ` · ${openCount} fiado${openCount === 1 ? "" : "s"} aberto${openCount === 1 ? "" : "s"}` : ""}</p>
+        </div>
+        <div class="item-card-actions">
+          <button type="button" data-edit-client="${text(client.id)}">Editar</button>
+          <button type="button" data-delete-client="${text(client.id)}">Excluir</button>
+        </div>
+      </article>`;
+  }).join("") : "<p class='panel-hint'>Nenhum cliente cadastrado.</p>";
+}
+
+function renderFiadoFilters() {
+  const filters = [
+    { id: "all", label: "Todos" },
+    { id: "open", label: "Em aberto" },
+    { id: "overdue", label: "Vencidos" },
+    { id: "paid", label: "Quitados" }
+  ];
+  document.getElementById("fiado-status-filters").innerHTML = filters.map((item) => `
+    <button type="button" data-fiado-status="${item.id}" class="${fiadoFilter.status === item.id ? "is-active" : ""}">${item.label}</button>
+  `).join("");
+}
+
+function renderFiado() {
+  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
+  const overdueItems = openItems.filter((item) => item.status === "overdue");
+  const dueSoon = openItems.filter((item) => {
+    if (!item.nextDueDate || item.status === "overdue") return false;
+    const due = new Date(`${item.nextDueDate}T12:00:00`);
+    const limit = new Date();
+    limit.setDate(limit.getDate() + 7);
+    return due <= limit;
+  });
+  const receivable = openItems.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const receivedMonth = (catalog.fiado || []).reduce((sum, entry) => {
+    const payments = (entry.payments || []).filter((pay) => (pay.paidAt || "").slice(0, 7) === monthKey);
+    return sum + payments.reduce((acc, pay) => acc + Number(pay.amount || 0), 0);
+  }, 0);
+
+  document.getElementById("fiado-summary").innerHTML = `
+    <div class="stat-card"><span>A receber</span><strong>${money(receivable)}</strong></div>
+    <div class="stat-card"><span>Vencidos</span><strong>${overdueItems.length}</strong></div>
+    <div class="stat-card"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></div>
+    <div class="stat-card"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></div>
+  `;
+
+  renderFiadoFilters();
+  fillClientSelects();
+  fillFiadoProducts(lastFiadoProductId);
+  renderClients();
+
+  const rows = filteredFiado();
+  document.getElementById("fiado-result-meta").textContent = rows.length
+    ? `${rows.length} fiado${rows.length === 1 ? "" : "s"} nesta visão`
+    : "Nenhum fiado nesta visão.";
+
+  document.getElementById("fiado-list").innerHTML = rows.length ? rows.map((entry) => `
+    <article class="item-card fiado-card">
+      <div class="item-card-body">
+        <span class="fiado-badge is-${text(entry.status)}">${fiadoStatusLabel(entry.status)}</span>
+        <h4>${text(entry.clientName)} · ${text(entry.productName)}</h4>
+        <p>${entry.quantity} un. · Total ${money(entry.total)}</p>
+        <div class="fiado-meta">
+          <span>Pago: ${money(entry.paid)}</span>
+          <span>Saldo: ${money(entry.balance)}</span>
+          <span>Próximo: ${formatDate(entry.nextDueDate)}</span>
+          ${entry.installmentAmount ? `<span>Parcela: ${money(entry.installmentAmount)}</span>` : ""}
+        </div>
+        ${entry.notes ? `<p class="payment-history">${text(entry.notes)}</p>` : ""}
+        ${entry.payments?.length ? `
+          <p class="payment-history">
+            ${entry.payments.slice(-3).map((pay) => `${formatDate(pay.paidAt)} · ${money(pay.amount)}${pay.note ? ` (${text(pay.note)})` : ""}`).join(" · ")}
+          </p>` : ""}
+      </div>
+      <div class="fiado-actions">
+        ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
+      </div>
+    </article>
+  `).join("") : "<p class='panel-hint'>Nenhum fiado registrado ainda.</p>";
+}
+
+function setSalesMode(mode) {
+  salesMode = mode;
+  document.querySelectorAll("[data-sales-mode]").forEach((button) => {
+    const active = button.dataset.salesMode === mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.getElementById("sales-cash-panel").hidden = mode !== "cash";
+  document.getElementById("sales-fiado-panel").hidden = mode !== "fiado";
+  if (mode === "fiado") renderFiado();
+}
+
+function openClient(client) {
+  const form = document.getElementById("client-form");
+  form.reset();
+  showError(document.getElementById("client-error"), "");
+  document.getElementById("client-dialog-title").textContent = client ? "Editar cliente" : "Novo cliente";
+  form.elements.id.value = client?.id || "";
+  form.elements.name.value = client?.name || "";
+  form.elements.phone.value = client?.phone || "";
+  form.elements.notes.value = client?.notes || "";
+  document.getElementById("client-dialog").showModal();
+}
+
+function openPayment(entry) {
+  const form = document.getElementById("payment-form");
+  form.reset();
+  showError(document.getElementById("payment-error"), "");
+  form.elements.fiadoId.value = entry.id;
+  form.elements.nextDueDate.value = entry.nextDueDate || "";
+  document.getElementById("payment-summary").textContent =
+    `${entry.clientName} · ${entry.productName} · Saldo ${money(entry.balance)}`;
+  document.getElementById("payment-dialog").showModal();
 }
 
 async function loadCatalog() {
   catalog = await request("/api/admin/store");
   if (!Array.isArray(catalog.sales)) catalog.sales = [];
+  if (!Array.isArray(catalog.clients)) catalog.clients = [];
+  if (!Array.isArray(catalog.fiado)) catalog.fiado = [];
   renderProducts();
   renderBanners();
   renderStock();
   renderSales();
+  if (salesMode === "fiado") renderFiado();
 }
 
 function openProduct(product) {
@@ -581,6 +789,7 @@ document.querySelectorAll(".admin-tabs button").forEach((button) => {
     });
     if (button.dataset.tab === "stock") stockSearch.focus();
     if (button.dataset.tab === "products") productSearch.focus();
+    if (button.dataset.tab === "sales" && salesMode === "fiado") renderFiado();
   });
 });
 
@@ -604,6 +813,131 @@ document.getElementById("sales-category-filters").addEventListener("click", (eve
   if (!button) return;
   salesFilter.category = button.dataset.saleCat;
   renderSales();
+});
+
+document.querySelectorAll("[data-sales-mode]").forEach((button) => {
+  button.addEventListener("click", () => setSalesMode(button.dataset.salesMode));
+});
+
+document.getElementById("new-client-btn").addEventListener("click", () => openClient(null));
+document.getElementById("cancel-client").addEventListener("click", () => document.getElementById("client-dialog").close());
+document.getElementById("cancel-payment").addEventListener("click", () => document.getElementById("payment-dialog").close());
+document.getElementById("client-search").addEventListener("input", (event) => {
+  clientSearchQuery = event.target.value;
+  renderClients();
+});
+
+document.getElementById("client-list").addEventListener("click", async (event) => {
+  const editId = event.target.dataset.editClient;
+  const deleteId = event.target.dataset.deleteClient;
+  if (editId) {
+    openClient(catalog.clients.find((item) => item.id === editId));
+  }
+  if (deleteId && window.confirm("Excluir este cliente?")) {
+    await request(`/api/admin/clients/${deleteId}`, { method: "DELETE" });
+    await loadCatalog();
+  }
+});
+
+document.getElementById("client-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const clientError = document.getElementById("client-error");
+  showError(clientError, "");
+  const payload = Object.fromEntries(new FormData(event.target).entries());
+  const id = payload.id;
+  try {
+    await request(id ? `/api/admin/clients/${id}` : "/api/admin/clients", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload)
+    });
+    document.getElementById("client-dialog").close();
+    await loadCatalog();
+  } catch (error) {
+    showError(clientError, error.message);
+  }
+});
+
+document.getElementById("fiado-category").addEventListener("change", () => {
+  fillFiadoProducts(document.querySelector("#fiado-form [name='productId']").value);
+});
+
+document.querySelector("#fiado-form [name='productId']").addEventListener("change", (event) => {
+  const option = event.target.selectedOptions[0];
+  lastFiadoProductId = option?.value || "";
+  if (option) {
+    document.querySelector("#fiado-form [name='unitPrice']").value = option.dataset.price || 0;
+  }
+});
+
+document.getElementById("fiado-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const fiadoError = document.getElementById("fiado-error");
+  showError(fiadoError, "");
+  const payload = Object.fromEntries(new FormData(event.target).entries());
+  if (!payload.clientId) {
+    showError(fiadoError, "Cadastre e selecione um cliente.");
+    return;
+  }
+  if (!payload.productId) {
+    showError(fiadoError, "Selecione um produto.");
+    return;
+  }
+  try {
+    await request("/api/admin/fiado", {
+      method: "POST",
+      body: JSON.stringify({
+        clientId: payload.clientId,
+        productId: payload.productId,
+        quantity: Number(payload.quantity),
+        unitPrice: Number(payload.unitPrice),
+        downPayment: Number(payload.downPayment || 0),
+        nextDueDate: payload.nextDueDate,
+        installmentAmount: Number(payload.installmentAmount || 0),
+        notes: payload.notes
+      })
+    });
+    lastFiadoProductId = payload.productId;
+    event.target.elements.downPayment.value = 0;
+    event.target.elements.notes.value = "";
+    await loadCatalog();
+  } catch (error) {
+    showError(fiadoError, error.message);
+  }
+});
+
+document.getElementById("fiado-status-filters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-fiado-status]");
+  if (!button) return;
+  fiadoFilter.status = button.dataset.fiadoStatus;
+  renderFiado();
+});
+
+document.getElementById("fiado-list").addEventListener("click", (event) => {
+  const fiadoId = event.target.dataset.payFiado;
+  if (!fiadoId) return;
+  const entry = catalog.fiado.find((item) => item.id === fiadoId);
+  if (entry) openPayment(entry);
+});
+
+document.getElementById("payment-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const paymentError = document.getElementById("payment-error");
+  showError(paymentError, "");
+  const payload = Object.fromEntries(new FormData(event.target).entries());
+  try {
+    await request(`/api/admin/fiado/${payload.fiadoId}/payments`, {
+      method: "POST",
+      body: JSON.stringify({
+        amount: Number(payload.amount),
+        nextDueDate: payload.nextDueDate,
+        note: payload.note
+      })
+    });
+    document.getElementById("payment-dialog").close();
+    await loadCatalog();
+  } catch (error) {
+    showError(paymentError, error.message);
+  }
 });
 
 document.addEventListener("keydown", (event) => {

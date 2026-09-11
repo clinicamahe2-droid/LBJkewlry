@@ -464,8 +464,8 @@
     {
       "id": "banner-1",
       "type": "video",
-      "image": "assets/f53a779f6da579de_aede1ae5-1dc3-428d-95a4-643f90.jpg",
-      "video": "assets/uploads/1789006213119-0ce3e6981f46.mp4",
+      "image": "",
+      "video": "assets/uploads/1789006662473-a6b2a66001d1.mp4",
       "title": "Peças com presença",
       "alt": "Peças com presença"
     },
@@ -498,14 +498,6 @@
       "type": "image",
       "image": "assets/uploads/1789006269249-590921303f49.png",
       "video": "",
-      "title": "",
-      "alt": "Banner"
-    },
-    {
-      "id": "banner-1",
-      "type": "video",
-      "image": "",
-      "video": "assets/uploads/1789006662473-a6b2a66001d1.mp4",
       "title": "",
       "alt": "Banner"
     }

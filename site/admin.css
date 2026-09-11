@@ -619,7 +619,135 @@ dialog::backdrop {
   padding: 0.35rem;
 }
 
+.sales-mode-tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.sales-mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #fff;
+  color: #5c5c5c;
+  border-color: #d8d4cc;
+  padding: 0.45rem 0.75rem;
+}
+
+.sales-mode-tabs button.is-active {
+  color: #161616;
+  border-color: #161616;
+}
+
+.panel-head--compact {
+  margin-bottom: 0.75rem;
+}
+
+.panel-head--compact h3 {
+  font-family: Oswald, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+}
+
+.fiado-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.fiado-block {
+  background: #fff;
+  border: 1px solid #d8d4cc;
+  padding: 1rem;
+}
+
+.fiado-block input[type="search"] {
+  margin-bottom: 0.75rem;
+}
+
+.fiado-card {
+  align-items: start;
+}
+
+.fiado-card .item-card-body p {
+  font-size: 0.8125rem;
+  color: #5c5c5c;
+}
+
+.fiado-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.fiado-badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid #d8d4cc;
+}
+
+.fiado-badge.is-open {
+  color: #1f6b3a;
+  border-color: #1f6b3a;
+}
+
+.fiado-badge.is-overdue {
+  color: #8a2b2b;
+  border-color: #8a2b2b;
+}
+
+.fiado-badge.is-paid {
+  color: #5c5c5c;
+}
+
+.sale-badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid #161616;
+  margin-bottom: 0.35rem;
+}
+
+.fiado-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.fiado-actions button {
+  white-space: nowrap;
+}
+
+.payment-history {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #5c5c5c;
+}
+
 @media (max-width: 768px) {
+  .fiado-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-mode-tabs {
+    width: 100%;
+  }
+
+  .sales-mode-tabs button {
+    flex: 1;
+    justify-content: center;
+  }
+
   .admin-header {
     flex-direction: column;
     align-items: stretch;

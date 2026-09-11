@@ -156,18 +156,26 @@ async function createApp() {
     })
   );
 
-  app.get("/api/catalog", (_req, res) => {
-    res.json(store.publicCatalog());
+  app.get("/api/catalog", async (_req, res) => {
+    try {
+      res.json(await store.publicCatalog());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  app.get("/api/products/:id", (req, res) => {
-    const catalog = store.loadCatalog();
-    const product = catalog.products.find((item) => item.id === req.params.id);
-    if (!product) {
-      res.status(404).json({ error: "Produto não encontrado." });
-      return;
+  app.get("/api/products/:id", async (req, res) => {
+    try {
+      const catalog = await store.loadCatalog();
+      const product = catalog.products.find((item) => item.id === req.params.id);
+      if (!product) {
+        res.status(404).json({ error: "Produto não encontrado." });
+        return;
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-    res.json(product);
   });
 
   app.post("/api/admin/login", loginLimited, (req, res) => {
@@ -200,45 +208,89 @@ async function createApp() {
     res.json({ user: req.session.admin.user });
   });
 
-  app.get("/api/admin/store", requireAdmin, (_req, res) => {
-    res.json(store.loadCatalog());
+  app.get("/api/admin/store", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await store.loadCatalog());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  app.post("/api/admin/sales", requireAdmin, (req, res) => {
+  app.post("/api/admin/sales", requireAdmin, async (req, res) => {
     try {
-      res.status(201).json(store.recordSale(req.body));
+      res.status(201).json(await store.recordSale(req.body));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.post("/api/admin/stock", requireAdmin, (req, res) => {
+  app.post("/api/admin/fiado", requireAdmin, async (req, res) => {
     try {
-      const product = store.adjustStock(req.body?.productId, req.body?.quantity);
+      res.status(201).json(await store.recordFiadoSale(req.body));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/fiado/:id/payments", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.recordFiadoPayment(req.params.id, req.body));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/clients", requireAdmin, async (req, res) => {
+    try {
+      res.status(201).json(await store.saveClient(req.body));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/clients/:id", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.saveClient(req.body, req.params.id));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/clients/:id", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.deleteClient(req.params.id));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/stock", requireAdmin, async (req, res) => {
+    try {
+      const product = await store.adjustStock(req.body?.productId, req.body?.quantity);
       res.json(product);
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.post("/api/admin/products", requireAdmin, (req, res) => {
+  app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
-      const catalog = store.loadCatalog();
+      const catalog = await store.loadCatalog();
       const product = store.normalizeProduct(req.body);
       if (catalog.products.some((item) => item.id === product.id)) {
         product.id = `${product.id}-${Date.now().toString(36)}`;
       }
       catalog.products.push(product);
-      store.saveCatalog(catalog);
+      await store.saveCatalog(catalog);
       res.status(201).json(product);
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.put("/api/admin/products/:id", requireAdmin, (req, res) => {
+  app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
-      const catalog = store.loadCatalog();
+      const catalog = await store.loadCatalog();
       const index = catalog.products.findIndex((item) => item.id === req.params.id);
       if (index === -1) {
         res.status(404).json({ error: "Produto não encontrado." });
@@ -246,34 +298,38 @@ async function createApp() {
       }
       const product = store.normalizeProduct(req.body, req.params.id);
       catalog.products[index] = product;
-      store.saveCatalog(catalog);
+      await store.saveCatalog(catalog);
       res.json(product);
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.delete("/api/admin/products/:id", requireAdmin, (req, res) => {
-    const catalog = store.loadCatalog();
-    const next = catalog.products.filter((item) => item.id !== req.params.id);
-    if (next.length === catalog.products.length) {
-      res.status(404).json({ error: "Produto não encontrado." });
-      return;
+  app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
+    try {
+      const catalog = await store.loadCatalog();
+      const next = catalog.products.filter((item) => item.id !== req.params.id);
+      if (next.length === catalog.products.length) {
+        res.status(404).json({ error: "Produto não encontrado." });
+        return;
+      }
+      catalog.products = next;
+      await store.saveCatalog(catalog);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
-    catalog.products = next;
-    store.saveCatalog(catalog);
-    res.json({ ok: true });
   });
 
-  app.put("/api/admin/banners", requireAdmin, (req, res) => {
+  app.put("/api/admin/banners", requireAdmin, async (req, res) => {
     try {
       const banners = Array.isArray(req.body?.banners) ? req.body.banners : [];
       if (!banners.length) {
         throw new Error("Inclua pelo menos um banner.");
       }
-      const catalog = store.loadCatalog();
+      const catalog = await store.loadCatalog();
       catalog.banners = banners.map(store.normalizeBanner);
-      store.saveCatalog(catalog);
+      await store.saveCatalog(catalog);
       res.json({ banners: catalog.banners });
     } catch (error) {
       res.status(400).json({ error: error.message });

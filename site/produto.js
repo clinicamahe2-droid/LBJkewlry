@@ -115,17 +115,6 @@
                 </div>
               </details>
             </div>
-
-            <div class="pdp-shipping">
-              <p class="pdp-shipping-title">Simulação de frete</p>
-              <form class="pdp-shipping-form">
-                <input type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" aria-label="CEP">
-                <button type="submit">OK</button>
-              </form>
-              <a href="#">Não sei meu CEP</a>
-            </div>
-
-            <a class="pdp-whatsapp" href="#">Fale com uma personal shopper</a>
           </section>
         </div>
 
@@ -151,14 +140,6 @@
         document.querySelectorAll(".pdp-variant-btn").forEach((item) => item.classList.remove("is-active"));
         btn.classList.add("is-active");
       });
-    });
-
-    document.querySelector(".pdp-shipping-form").addEventListener("submit", (event) => {
-      event.preventDefault();
-      const input = event.currentTarget.querySelector("input");
-      if (input.value.replace(/\D/g, "").length === 8) {
-        input.value = "Frete grátis acima de R$ 699";
-      }
     });
   }
 

@@ -53,15 +53,26 @@ git push -u origin main
 | `ADMIN_USER` | `admin` (ou outro usuário) |
 | `ADMIN_PASSWORD` | senha forte do painel |
 | `SESSION_SECRET` | texto longo e aleatório |
+| `SUPABASE_URL` | URL do projeto Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | chave **service_role** (só no servidor) |
 
 4. Deploy.
 
 A loja abre na URL da Vercel. O painel fica em `/admin`.
 
-### Limite importante da Vercel
+## Supabase (persistência)
 
-A Vercel não guarda arquivo em disco de forma permanente. Produtos e banners do **seed** sobem com o site. Alterações feitas no painel (estoque, vendas, upload novo) podem sumir no próximo deploy ou cold start.
+Com `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` configurados, produtos, estoque, vendas, fiado e clientes ficam no banco — não somem no redeploy da Vercel.
 
-Para operação diária do estoque com persistência, o próximo passo é um servidor com disco (Railway, Render ou VPS). A Vercel serve bem para colocar a vitrine no ar agora.
+1. No [Supabase](https://supabase.com), abra **SQL Editor** e rode o arquivo `server/supabase/schema.sql`.
+2. Em **Settings → API**, copie a **service_role** key (nunca coloque no front).
+3. Cadastre as variáveis no `.env` local e na Vercel.
+4. Migre os dados atuais (opcional):
 
-Uploads de vídeo grandes também podem falhar na Vercel (limite de corpo da requisição). Prefira imagens no painel se estiver nesse ambiente.
+```bash
+npm run migrate:supabase
+```
+
+Sem Supabase configurado, o projeto continua usando `catalog.json` localmente.
+
+Uploads de mídia (banners) ainda ficam em `site/assets/uploads/` — na Vercel, prefira imagens leves ou use Supabase Storage no futuro.
