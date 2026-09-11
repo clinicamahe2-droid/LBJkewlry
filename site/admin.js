@@ -687,6 +687,33 @@ function openProduct(product) {
 }
 
 async function uploadFile(file, { banner = false } = {}) {
+  const uploadUrlEndpoint = banner ? "/api/admin/upload-url?media=banner" : "/api/admin/upload-url";
+  const signedResponse = await fetch(uploadUrlEndpoint, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: file.name,
+      contentType: file.type,
+      size: file.size
+    })
+  });
+  const signedData = await signedResponse.json().catch(() => ({}));
+  if (signedResponse.ok && signedData.uploadUrl) {
+    const putResponse = await fetch(signedData.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file
+    });
+    if (!putResponse.ok) {
+      throw new Error("Falha no envio do arquivo para o storage.");
+    }
+    return { url: signedData.url, mediaType: signedData.mediaType };
+  }
+  if (signedResponse.status !== 501) {
+    throw new Error(signedData.error || "Falha ao preparar envio do arquivo.");
+  }
+
   const body = new FormData();
   body.append("file", file);
   const response = await fetch(banner ? "/api/admin/upload?media=banner" : "/api/admin/upload", {
@@ -1110,6 +1137,7 @@ bannerList.addEventListener("change", async (event) => {
     if (uploaded.mediaType === "video") {
       card.querySelector('[data-field="type"]').value = "video";
       card.querySelector('[data-field="video"]').value = uploaded.url;
+      card.querySelector('[data-field="image"]').value = "";
     } else {
       card.querySelector('[data-field="type"]').value = "image";
       card.querySelector('[data-field="image"]').value = uploaded.url;

@@ -17,6 +17,7 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const store = require("./store");
+const storage = require("./storage");
 
 const UPLOAD_DIR = IS_SERVERLESS
   ? path.join(os.tmpdir(), "lb-jewelry-uploads")
@@ -336,10 +337,32 @@ async function createApp() {
     }
   });
 
+  app.post("/api/admin/upload-url", requireAdmin, async (req, res) => {
+    try {
+      if (!storage.canUseStorage()) {
+        res.status(501).json({ error: "Upload remoto indisponível neste ambiente." });
+        return;
+      }
+      const allowVideo = req.query.media === "banner";
+      const maxBytes = allowVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
+      const payload = await storage.createSignedUpload({
+        originalName: req.body?.filename,
+        mimetype: req.body?.contentType,
+        size: Number(req.body?.size || 0),
+        allowVideo,
+        maxBytes
+      });
+      res.json(payload);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/admin/upload", requireAdmin, (req, res) => {
     const allowVideo = req.query.media === "banner";
+    const maxBytes = allowVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
     const uploader = allowVideo ? uploadBanner : uploadImage;
-    uploader.single("file")(req, res, (error) => {
+    uploader.single("file")(req, res, async (error) => {
       if (error) {
         const tooBig = error.code === "LIMIT_FILE_SIZE";
         res.status(400).json({
@@ -353,10 +376,27 @@ async function createApp() {
         res.status(400).json({ error: "Nenhum arquivo enviado." });
         return;
       }
-      res.json({
-        url: `assets/uploads/${req.file.filename}`,
-        mediaType: req.file.mimetype.startsWith("video/") ? "video" : "image"
-      });
+      try {
+        if (storage.canUseStorage() && IS_SERVERLESS) {
+          const fsPromises = require("fs/promises");
+          const buffer = await fsPromises.readFile(req.file.path);
+          const payload = await storage.uploadBuffer({
+            buffer,
+            originalName: req.file.originalname,
+            mimetype: req.file.mimetype,
+            allowVideo,
+            maxBytes
+          });
+          res.json(payload);
+          return;
+        }
+        res.json({
+          url: `assets/uploads/${req.file.filename}`,
+          mediaType: req.file.mimetype.startsWith("video/") ? "video" : "image"
+        });
+      } catch (uploadError) {
+        res.status(400).json({ error: uploadError.message });
+      }
     });
   });
 

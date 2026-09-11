@@ -72,6 +72,28 @@ create table if not exists fiado (
   created_at timestamptz not null default now()
 );
 
+-- Storage público para fotos e vídeos enviados pelo admin
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('media', 'media', true, 83886080)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'Public read media'
+  ) then
+    create policy "Public read media"
+    on storage.objects for select
+    using (bucket_id = 'media');
+  end if;
+end $$;
+
 alter table products enable row level security;
 alter table banners enable row level security;
 alter table clients enable row level security;
