@@ -1810,20 +1810,14 @@ body.promo-open {
   position: fixed;
   inset: 0;
   z-index: 400;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   padding:
-    max(0.75rem, env(safe-area-inset-top, 0px))
-    max(0.75rem, env(safe-area-inset-right, 0px))
-    max(0.75rem, env(safe-area-inset-bottom, 0px))
-    max(0.75rem, env(safe-area-inset-left, 0px));
-  overflow: auto;
-}
-
-@media (min-width: 700px) {
-  .promo-popup.is-open {
-    align-items: center;
-  }
+    max(0.6rem, env(safe-area-inset-top, 0px))
+    max(0.6rem, env(safe-area-inset-right, 0px))
+    max(0.6rem, env(safe-area-inset-bottom, 0px))
+    max(0.6rem, env(safe-area-inset-left, 0px));
+  overflow: hidden;
 }
 
 .promo-popup-backdrop {
@@ -1837,77 +1831,79 @@ body.promo-open {
 .promo-popup-card {
   position: relative;
   z-index: 1;
-  width: min(100%, 560px);
-  max-height: min(88dvh, 760px);
-  overflow: auto;
+  width: min(100%, 440px);
+  overflow: hidden;
   background: #f7f4ee;
   border: 1px solid rgba(201, 178, 122, 0.45);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
 
 .promo-popup-close {
-  display: block;
-  width: 100%;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  width: auto;
+  min-width: 4.5rem;
   border: none;
   background: #161616;
   color: #fff;
-  padding: 0.85rem 1rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
 }
 
 .promo-popup-visual {
-  min-height: 180px;
+  height: 150px;
   background: #111 url("/assets/promo-coupon-setembro.jpg") center / cover no-repeat;
 }
 
 .promo-popup-image {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 240px;
+  height: 150px;
   object-fit: cover;
 }
 
 .promo-popup-body {
-  padding: 1.25rem 1.25rem 1.5rem;
+  padding: 0.9rem 1rem 1rem;
 }
 
 .promo-popup-body h2 {
   font-family: var(--font-serif);
-  font-size: 1.05rem;
-  letter-spacing: 0.12em;
+  font-size: 0.95rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--gold-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .promo-popup-lead {
   color: var(--text-dark-muted);
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  margin-bottom: 0.7rem;
 }
 
 .promo-popup-body label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-dark-muted);
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.55rem;
 }
 
 .promo-popup-body input {
   display: block;
   width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.65rem 0.75rem;
+  margin-top: 0.25rem;
+  padding: 0.55rem 0.7rem;
   border: 1px solid var(--border-light);
   background: #fff;
   color: var(--text-dark);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 
 .promo-popup-error {
@@ -1921,7 +1917,7 @@ body.promo-open {
 .promo-popup-skip {
   width: 100%;
   border: none;
-  padding: 0.85rem 1rem;
+  padding: 0.7rem 1rem;
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1941,12 +1937,12 @@ body.promo-open {
   color: var(--text-dark-muted);
 }
 
-.promo-step {
-  display: block;
+.promo-step[hidden] {
+  display: none !important;
 }
 
 #promo-step-coupon {
-  padding: 1.5rem 1.25rem 1.75rem;
+  padding: 1.25rem 1rem 1.25rem;
   text-align: center;
 }
 
@@ -2006,6 +2002,15 @@ body.promo-open {
 }
 
 @media (max-width: 768px) {
+  .promo-popup-visual,
+  .promo-popup-image {
+    height: 120px;
+  }
+
+  .promo-popup-body {
+    padding: 0.75rem 0.85rem 0.85rem;
+  }
+
   .whatsapp-float {
     width: 3.25rem;
     height: 3.25rem;
