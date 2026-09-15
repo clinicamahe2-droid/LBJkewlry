@@ -207,11 +207,7 @@ async function loadCatalog() {
       await saveCatalogToSupabase(seeded);
       return seeded;
     }
-    const migrated = migrateCatalogData(catalog).catalog;
-    migrated.banners = migrated.banners.map((banner) => (
-      banner.type === "video" ? { ...banner, image: "" } : banner
-    ));
-    return migrated;
+    return migrateCatalogData(catalog).catalog;
   }
 
   ensureDir(DATA_DIR);
@@ -694,10 +690,11 @@ function normalizeBanner(input, index) {
     if (!src) {
       throw new Error("Cada banner de vídeo precisa de um arquivo MP4 ou WEBM.");
     }
+    const poster = isVideoPath(image) ? "" : image;
     return {
       id,
       type: "video",
-      image: "",
+      image: poster,
       video: src,
       title,
       alt

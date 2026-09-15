@@ -21,7 +21,7 @@ function prepareBanners(banners) {
   return dedupeBanners(banners || [])
     .map((banner) => {
       if (banner.type === "video" && banner.video) {
-        return { ...banner, image: "" };
+        return { ...banner, poster: banner.image || "", image: "" };
       }
       return banner;
     })
@@ -37,21 +37,48 @@ function revealHero() {
   heroSection?.classList.add("is-ready");
 }
 
+function playHeroVideo(video) {
+  if (!video) return;
+  const attempt = video.play();
+  if (attempt?.catch) {
+    attempt.catch(() => {});
+  }
+}
+
 function bindHeroVideo(video) {
   const markReady = () => {
+    if (video.classList.contains("is-ready")) return;
     video.classList.add("is-ready");
     const slideIndex = [...heroTrack.children].indexOf(video.closest(".hero-slide"));
     if (slideIndex === currentSlide) {
-      video.play().catch(() => {});
+      playHeroVideo(video);
     }
   };
+
+  ["loadeddata", "canplay", "playing"].forEach((eventName) => {
+    video.addEventListener(eventName, markReady, { once: true });
+  });
+  video.addEventListener("error", markReady, { once: true });
+  window.setTimeout(markReady, 2500);
 
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
     markReady();
     return;
   }
 
-  video.addEventListener("canplay", markReady, { once: true });
+  playHeroVideo(video);
+}
+
+function armHeroPlaybackOnInteraction() {
+  const kick = () => {
+    heroTrack?.querySelectorAll(".hero-video").forEach((video, index) => {
+      if (index === currentSlide) {
+        playHeroVideo(video);
+      }
+    });
+  };
+  document.addEventListener("touchstart", kick, { once: true, passive: true });
+  document.addEventListener("click", kick, { once: true });
 }
 
 function goToSlide(index, total) {
@@ -64,7 +91,7 @@ function goToSlide(index, total) {
   heroTrack.querySelectorAll("video").forEach((video, i) => {
     if (i === index) {
       if (video.classList.contains("is-ready")) {
-        video.play().catch(() => {});
+        playHeroVideo(video);
       }
     } else {
       video.pause();
@@ -88,8 +115,9 @@ function setupHero(banners) {
 
   heroTrack.innerHTML = slides.map((banner, index) => {
     const label = escapeHtml(banner.alt || banner.title || "Banner");
+    const poster = banner.poster ? ` poster="${escapeHtml(banner.poster)}"` : "";
     const media = banner.type === "video" && banner.video
-      ? `<video class="hero-video" src="${escapeHtml(banner.video)}" muted loop playsinline preload="${index === 0 ? "auto" : "metadata"}" aria-label="${label}"></video>`
+      ? `<video class="hero-video" src="${escapeHtml(banner.video)}"${poster} muted loop autoplay playsinline webkit-playsinline preload="${index === 0 ? "auto" : "metadata"}" aria-label="${label}"></video>`
       : `<img src="${escapeHtml(banner.image)}" alt="${label}">`;
     return `
     <div class="hero-slide">
@@ -102,6 +130,7 @@ function setupHero(banners) {
   }).join("");
 
   heroTrack.querySelectorAll(".hero-video").forEach(bindHeroVideo);
+  armHeroPlaybackOnInteraction();
 
   heroDots.innerHTML = slides.map((_, index) => `
     <button class="hero-dot${index === 0 ? " active" : ""}" type="button" aria-label="Slide ${index + 1}"></button>
