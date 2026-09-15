@@ -67,7 +67,7 @@ function bannerFromRow(row) {
     type,
     title: row.title || "",
     alt: row.alt || "",
-    image: type === "video" ? "" : (row.image || ""),
+    image: row.image || "",
     video: row.video || ""
   };
 }
