@@ -1843,6 +1843,59 @@ document.getElementById("prospect-list")?.addEventListener("click", async (event
   await loadCatalog();
 });
 
+function isIosDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function setupAdminPwa() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw-admin.js", { scope: "/" }).catch(() => {});
+  }
+
+  const installBtn = document.getElementById("install-pwa-btn");
+  if (!installBtn) return;
+
+  const standalone = window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+  if (standalone) {
+    installBtn.hidden = true;
+    return;
+  }
+
+  let deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredPrompt = event;
+    installBtn.hidden = false;
+  });
+
+  installBtn.addEventListener("click", async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice.catch(() => {});
+      deferredPrompt = null;
+      installBtn.hidden = true;
+      return;
+    }
+    if (isIosDevice()) {
+      window.alert("No iPhone/iPad: toque em Compartilhar no Safari e escolha \"Adicionar à Tela de Início\".");
+    }
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    installBtn.hidden = true;
+  });
+
+  if (isIosDevice()) {
+    installBtn.hidden = false;
+    installBtn.textContent = "Instalar no iPhone";
+  }
+}
+
+setupAdminPwa();
+
 request("/api/admin/me")
   .then(async () => {
     showPanel();

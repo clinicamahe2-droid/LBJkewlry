@@ -6,10 +6,16 @@
   <title>Painel | LB jewelry</title>
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="theme-color" content="#161616">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LB Painel">
+  <link rel="manifest" href="/admin-manifest.json">
+  <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260914b">
+  <link rel="stylesheet" href="admin.css?v=20260328">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -29,6 +35,7 @@
       </label>
       <p id="login-error" class="form-error" hidden></p>
       <button type="submit">Entrar</button>
+      <p class="login-pwa-hint">No celular: instale o painel como app. No iPhone, use Compartilhar → Adicionar à Tela de Início.</p>
     </form>
   </div>
 
@@ -40,6 +47,7 @@
           <strong>Painel</strong>
         </div>
         <div class="admin-actions">
+          <button id="install-pwa-btn" type="button" hidden>Instalar app</button>
           <a href="/" target="_blank" rel="noopener">Ver loja</a>
           <button id="logout-btn" type="button">Sair</button>
         </div>
@@ -387,7 +395,7 @@
     </form>
   </dialog>
 
-  <script src="catalog.js?v=20260914"></script>
-  <script src="admin.js?v=20260914b"></script>
+  <script src="catalog.js?v=20260328"></script>
+  <script src="admin.js?v=20260328"></script>
 </body>
 </html>
