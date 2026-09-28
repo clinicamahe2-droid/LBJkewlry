@@ -23,9 +23,12 @@ const listFilter = {
   products: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false },
   stock: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false }
 };
-const salesFilter = { period: "month", category: "all" };
+const salesFilter = { period: "all", category: "all" };
 const fiadoFilter = { status: "all" };
+let fiadoView = "cobrar";
+let fiadoSearchQuery = "";
 let clientSearchQuery = "";
+let clientListFilter = "open";
 let stockFocusId = null;
 let lastSaleProductId = "";
 let lastFiadoProductId = "";
@@ -87,10 +90,24 @@ function phoneDigits(phone) {
 
 function whatsAppLink(phone, message) {
   const digits = phoneDigits(phone);
-  if (!digits) return "";
+  if (digits.length < 10) return "";
   const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
+
+function fiadoIcon(paths) {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
+
+const FIADO_ICONS = {
+  cobrar: fiadoIcon(`<path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 8H4c0-1.5 2-3 2-8"/><path d="M10 20a2 2 0 0 0 4 0"/>`),
+  abater: fiadoIcon(`<circle cx="12" cy="12" r="8"/><path d="M8 12h8"/>`),
+  venda: fiadoIcon(`<path d="M12 5v14M5 12h14"/>`),
+  clientes: fiadoIcon(`<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2"/><path d="M16.2 14.7a4.5 4.5 0 0 1 4.3 4.3"/>`),
+  wa: fiadoIcon(`<path d="M7.5 18.5 8.4 16A6.5 6.5 0 1 1 10.2 17.6L7.5 18.5z"/>`),
+  edit: fiadoIcon(`<path d="M4 20h4L18 10l-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/>`),
+  trash: fiadoIcon(`<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 13h6l1-13"/>`)
+};
 
 function fiadoCollectMessage(entry) {
   const lines = [
@@ -223,7 +240,7 @@ function renderFiadoCard(entry) {
           <div class="fiado-card-block">
             <span class="fiado-card-label">Produto</span>
             <p>${text(entry.productName)}</p>
-            <span class="fiado-card-sub">${entry.quantity} un. · Total ${money(entry.total)}</span>
+            <span class="fiado-card-sub">${entry.quantity} un. · Total ${money(entry.total)}${entry.unitCost ? ` · Custo ${money(entry.unitCost * (entry.quantity || 1))}` : ""}${entry.paymentMethod ? ` · ${text(entry.paymentMethod)}` : ""}</span>
           </div>
         </div>
         <dl class="fiado-financials">
@@ -445,7 +462,9 @@ function productMeta(item) {
     : `${money(item.priceMin)}${item.priceMin !== item.priceMax ? ` — ${money(item.priceMax)}` : ""}`;
   const stockClass = item.stock <= 2 ? "stock-low" : "";
   const promoTag = isPromoProduct(item) ? ' · <span class="promo-tag">Promoção</span>' : "";
-  return `${price} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}${promoTag}`;
+  const inactive = item.active === false ? " · Inativo" : "";
+  const cost = Number(item.cost) > 0 ? ` · Custo ${money(item.cost)} · Margem ${money((item.priceMin || 0) - item.cost)}` : "";
+  return `${price}${cost} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}${promoTag}${inactive}`;
 }
 
 function promoDiscountLabel(item) {
@@ -700,10 +719,14 @@ function renderBanners() {
 function renderStock() {
   const totalUnits = catalog.products.reduce((sum, item) => sum + (item.stock || 0), 0);
   const low = catalog.products.filter((item) => item.stock <= 2).length;
+  const stockCost = catalog.products.reduce((sum, item) => sum + (Number(item.cost) || 0) * (item.stock || 0), 0);
+  const stockSale = catalog.products.reduce((sum, item) => sum + (Number(item.priceMin) || 0) * (item.stock || 0), 0);
   document.getElementById("stock-summary").innerHTML = `
     <div class="stat-card"><span>Peças em estoque</span><strong>${totalUnits}</strong></div>
     <div class="stat-card"><span>Produtos cadastrados</span><strong>${catalog.products.length}</strong></div>
     <div class="stat-card"><span>Estoque baixo</span><strong>${low}</strong></div>
+    <div class="stat-card"><span>Custo em estoque</span><strong>${money(stockCost)}</strong></div>
+    <div class="stat-card"><span>Venda potencial</span><strong>${money(stockSale)}</strong></div>
   `;
 
   const query = stockSearch.value.trim().toLowerCase();
@@ -732,6 +755,8 @@ function renderStock() {
               <h4>${text(item.name)}</h4>
               <p>
                 <span class="${item.stock <= 2 ? "stock-low" : ""}">${item.stock ?? 0} un.</span>
+                · Venda ${money(item.priceMin)}
+                · Custo ${money(item.cost || 0)}
                 · ${item.showOnHome ? "Na home" : "Fora da home"}
               </p>
             </div>
@@ -805,8 +830,14 @@ function renderSales() {
   const total = rows.reduce((sum, item) => sum + saleRevenueAmount(item), 0);
   const units = rows.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const ticket = rows.length ? total / rows.length : 0;
+  const cost = rows.reduce((sum, item) => {
+    if (item.type === "fiado_payment") return sum;
+    return sum + (Number(item.unitCost) || 0) * (item.quantity || 0);
+  }, 0);
   document.getElementById("sales-summary").innerHTML = `
-    <div class="stat-card"><span>Faturamento</span><strong>${money(total)}</strong></div>
+    <div class="stat-card"><span>Recebido</span><strong>${money(total)}</strong></div>
+    <div class="stat-card"><span>Custo das peças</span><strong>${money(cost)}</strong></div>
+    <div class="stat-card"><span>Resultado</span><strong>${money(total - cost)}</strong></div>
     <div class="stat-card"><span>Peças vendidas</span><strong>${units}</strong></div>
     <div class="stat-card"><span>Ticket médio</span><strong>${money(ticket)}</strong></div>
   `;
@@ -831,8 +862,10 @@ function renderSales() {
           <div class="item-card-body">
             <span class="sale-badge">${badge}</span>
             <h4>${text(item.productName || "Recebimento")}</h4>
-            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${clientName ? ` · Cliente: <strong>${text(clientName)}</strong>` : ""}</p>
+            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${clientName ? ` · Cliente: <strong>${text(clientName)}</strong>` : ""}${item.paymentMethod ? ` · ${text(item.paymentMethod)}` : ""}</p>
             ${item.type === "fiado" && Number(item.total || 0) > amount ? `<p class="sale-meta">Total da venda: ${money(item.total)} · Entrada: ${money(amount)}</p>` : ""}
+            ${item.unitCost && item.type !== "fiado_payment" ? `<p class="sale-meta">Custo ${money(item.unitCost * (item.quantity || 1))} · Margem ${money(amount - item.unitCost * (item.quantity || 1))}</p>` : ""}
+            ${item.notes ? `<p class="sale-meta">${text(item.notes)}</p>` : ""}
           </div>
           <strong class="sale-total">${money(amount)}</strong>
         </article>`;
@@ -873,12 +906,43 @@ function fillClientSelects() {
   }
 }
 
+function clientPhoneLabel(phone) {
+  const digits = phoneDigits(phone);
+  if (digits.length < 10) return "";
+  return String(phone || "").trim();
+}
+
+function clientLedger(clientId) {
+  const entries = (catalog.fiado || []).filter((item) => item.clientId === clientId);
+  const open = entries.filter((item) => item.status !== "paid");
+  const balance = open.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+  const nextDue = open
+    .map((item) => item.nextDueDate)
+    .filter(Boolean)
+    .sort()[0] || "";
+  const overdue = open.some((item) => item.status === "overdue");
+  return { openCount: open.length, balance, nextDue, overdue };
+}
+
 function filteredClients() {
   const query = clientSearchQuery.trim().toLowerCase();
-  return (catalog.clients || []).filter((client) => {
-    if (!query) return true;
-    return `${client.name} ${client.phone} ${client.notes || ""}`.toLowerCase().includes(query);
-  });
+  return (catalog.clients || [])
+    .filter((client) => {
+      const ledger = clientLedger(client.id);
+      if (clientListFilter === "open" && ledger.balance <= 0) return false;
+      if (clientListFilter === "clear" && ledger.balance > 0) return false;
+      if (!query) return true;
+      return `${client.name} ${client.phone} ${client.address || ""} ${client.notes || ""}`.toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      const left = clientLedger(a.id);
+      const right = clientLedger(b.id);
+      if (right.balance !== left.balance) return right.balance - left.balance;
+      if (left.nextDue && right.nextDue && left.nextDue !== right.nextDue) {
+        return left.nextDue.localeCompare(right.nextDue);
+      }
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
 }
 
 function filteredFiado() {
@@ -894,77 +958,238 @@ function fiadoStatusLabel(status) {
   return "Em aberto";
 }
 
+function renderClientFilters() {
+  const box = document.getElementById("client-filters");
+  if (!box) return;
+  const openCount = (catalog.clients || []).filter((client) => clientLedger(client.id).balance > 0).length;
+  const filters = [
+    { id: "all", label: "Todos" },
+    { id: "open", label: `Com saldo (${openCount})` },
+    { id: "clear", label: "Sem saldo" }
+  ];
+  box.innerHTML = filters.map((item) => `
+    <button type="button" data-client-filter="${item.id}" class="${clientListFilter === item.id ? "is-active" : ""}">${item.label}</button>
+  `).join("");
+}
+
 function renderClients() {
+  renderClientFilters();
   const rows = filteredClients();
   const list = document.getElementById("client-list");
   if (!list) return;
-  list.innerHTML = rows.length ? rows.map((client) => {
-    const openCount = (catalog.fiado || []).filter((item) => item.clientId === client.id && item.status !== "paid").length;
+  if (!rows.length) {
+    list.innerHTML = "<p class='panel-hint'>Nenhum cliente neste filtro.</p>";
+    return;
+  }
+
+  list.innerHTML = rows.map((client) => {
+    const ledger = clientLedger(client.id);
+    const phone = clientPhoneLabel(client.phone);
+    const note = String(client.notes || "").trim();
+    const bits = [];
+    if (phone) {
+      bits.push(`<a class="client-phone" href="${text(whatsAppLink(phone, `Olá ${client.name}, tudo bem?`))}" target="_blank" rel="noopener noreferrer">${text(phone)}</a>`);
+    }
+    if (ledger.nextDue) bits.push(`Vence ${formatDate(ledger.nextDue)}`);
+    if (ledger.openCount) bits.push(`${ledger.openCount} fiado${ledger.openCount === 1 ? "" : "s"}`);
     return `
-      <article class="item-card">
-        <div class="item-card-body">
-          <h4>${text(client.name)}</h4>
-          <p>${text(client.phone)}${openCount ? ` · ${openCount} fiado${openCount === 1 ? "" : "s"} aberto${openCount === 1 ? "" : "s"}` : ""}</p>
+      <article class="client-row${ledger.overdue ? " is-overdue" : ledger.balance > 0 ? " is-open" : ""}">
+        <div class="client-row-top">
+          <strong>${text(client.name)}</strong>
+          <span class="${ledger.balance > 0 ? "client-balance" : "client-clear"}">${ledger.balance > 0 ? money(ledger.balance) : "Quitado"}</span>
         </div>
-        <div class="item-card-actions">
-          <button type="button" data-edit-client="${text(client.id)}">Editar</button>
-          <button type="button" data-delete-client="${text(client.id)}">Excluir</button>
+        ${bits.length ? `<p class="client-row-meta">${bits.join(" · ")}</p>` : ""}
+        <div class="client-row-actions">
+          ${phone ? `<a class="icon-btn icon-btn--wa" href="${text(whatsAppLink(phone, ledger.balance > 0 ? `Olá ${client.name}, tudo bem?\nSeu saldo em aberto na LB jewelry é ${money(ledger.balance)}.` : `Olá ${client.name}, tudo bem?`))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp de ${text(client.name)}">${FIADO_ICONS.wa}</a>` : ""}
+          <button type="button" class="icon-btn" data-edit-client="${text(client.id)}" aria-label="Editar ${text(client.name)}">${FIADO_ICONS.edit}</button>
+          <button type="button" class="icon-btn icon-btn--danger" data-delete-client="${text(client.id)}" aria-label="Excluir ${text(client.name)}">${FIADO_ICONS.trash}</button>
         </div>
+        ${note ? `<details class="client-notes"><summary>Anotações</summary><p>${text(note)}</p></details>` : ""}
       </article>`;
-  }).join("") : "<p class='panel-hint'>Nenhum cliente cadastrado.</p>";
+  }).join("");
 }
 
-function renderFiadoFilters() {
-  const filters = [
-    { id: "all", label: "Todos" },
-    { id: "open", label: "Em aberto" },
-    { id: "overdue", label: "Vencidos" },
-    { id: "paid", label: "Quitados" }
+function fiadoMatchesQuery(entry) {
+  const query = fiadoSearchQuery.trim().toLowerCase();
+  if (!query) return true;
+  const client = resolveFiadoClient(entry);
+  return `${client.name} ${client.phone || ""} ${entry.productName || ""}`.toLowerCase().includes(query);
+}
+
+function fiadoMonthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function fiadoMonthPayments() {
+  const monthKey = fiadoMonthKey();
+  const rows = [];
+  (catalog.fiado || []).forEach((entry) => {
+    (entry.payments || []).forEach((pay) => {
+      if ((pay.paidAt || "").slice(0, 7) === monthKey) rows.push({ entry, pay });
+    });
+  });
+  return rows.sort((a, b) => String(b.pay.paidAt || "").localeCompare(String(a.pay.paidAt || "")));
+}
+
+function fiadoQueueMeta(entry) {
+  const bits = [entry.productName];
+  if (entry.status === "overdue" && entry.nextDueDate) bits.push(`venceu ${formatDate(entry.nextDueDate)}`);
+  else if (entry.nextDueDate) bits.push(`vence ${formatDate(entry.nextDueDate)}`);
+  else bits.push("sem vencimento");
+  return bits.filter(Boolean).join(" · ");
+}
+
+function fiadoQueueActions(entry, mode) {
+  const client = resolveFiadoClient(entry);
+  const contact = { ...entry, clientName: client.name, clientPhone: client.phone };
+  const href = whatsAppLink(contact.clientPhone, fiadoCollectMessage(contact));
+  const wa = href
+    ? `<a class="icon-btn icon-btn--wa" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="Cobrar ${text(client.name)} no WhatsApp">${FIADO_ICONS.wa}</a>`
+    : "";
+  const pay = entry.status !== "paid"
+    ? `<button type="button" class="icon-btn${mode === "abater" ? " icon-btn--pay" : ""}" data-pay-fiado="${text(entry.id)}" aria-label="Abater saldo de ${text(client.name)}">${FIADO_ICONS.abater}</button>`
+    : "";
+  const edit = `<button type="button" class="icon-btn" data-edit-fiado="${text(entry.id)}" aria-label="Editar fiado de ${text(client.name)}">${FIADO_ICONS.edit}</button>`;
+  return `<div class="fiado-queue-actions">${wa}${pay}${edit}</div>`;
+}
+
+function fiadoQueueRow(entry, mode) {
+  const client = resolveFiadoClient(entry);
+  const tone = entry.status === "overdue" ? " is-overdue" : isDueSoon(entry) ? " is-soon" : "";
+  return `
+    <article class="fiado-queue-row${tone}">
+      <div class="fiado-queue-main">
+        <div class="fiado-queue-top">
+          <strong>${text(client.name)}</strong>
+          <span class="fiado-queue-balance">${money(entry.balance)}</span>
+        </div>
+        <p class="fiado-queue-meta">${text(fiadoQueueMeta(entry))}</p>
+      </div>
+      ${fiadoQueueActions(entry, mode)}
+    </article>`;
+}
+
+function renderFiadoDock(overdueCount, openCount, clientCount) {
+  const dock = document.getElementById("fiado-dock");
+  if (!dock) return;
+  const alertCount = overdueCount;
+  const items = [
+    { id: "cobrar", label: "Cobrar", badge: alertCount, hot: alertCount > 0 },
+    { id: "abater", label: "Abater", badge: openCount, hot: false },
+    { id: "venda", label: "Venda", badge: 0, hot: false },
+    { id: "clientes", label: "Clientes", badge: clientCount, hot: false }
   ];
-  document.getElementById("fiado-status-filters").innerHTML = filters.map((item) => `
-    <button type="button" data-fiado-status="${item.id}" class="fiado-filter ${fiadoFilter.status === item.id ? "is-active" : ""}">${item.label}</button>
+  dock.innerHTML = items.map((item) => `
+    <button type="button" data-fiado-view="${item.id}" class="${fiadoView === item.id ? "is-active" : ""}" aria-pressed="${fiadoView === item.id ? "true" : "false"}">
+      ${FIADO_ICONS[item.id]}
+      ${item.badge ? `<span class="dock-badge${item.hot ? " is-hot" : ""}">${item.badge}</span>` : ""}
+      <span>${item.label}</span>
+    </button>
   `).join("");
+}
+
+function applyFiadoView() {
+  const work = fiadoView === "cobrar" || fiadoView === "abater" || fiadoView === "recebido";
+  const workPanel = document.getElementById("fiado-panel-work");
+  const salePanel = document.getElementById("fiado-panel-venda");
+  const clientPanel = document.getElementById("fiado-panel-clientes");
+  if (workPanel) workPanel.hidden = !work;
+  if (salePanel) salePanel.hidden = fiadoView !== "venda";
+  if (clientPanel) clientPanel.hidden = fiadoView !== "clientes";
+}
+
+function renderFiadoQueue(openItems, overdueItems, dueSoon) {
+  const list = document.getElementById("fiado-list");
+  const meta = document.getElementById("fiado-result-meta");
+  if (!list || !meta) return;
+
+  const open = openItems.filter(fiadoMatchesQuery);
+  const overdue = overdueItems.filter(fiadoMatchesQuery);
+  const soon = dueSoon.filter(fiadoMatchesQuery);
+
+  if (fiadoView === "recebido") {
+    const payments = fiadoMonthPayments().filter(({ entry }) => fiadoMatchesQuery(entry));
+    meta.textContent = payments.length
+      ? `${payments.length} recebimento${payments.length === 1 ? "" : "s"} neste mês`
+      : "Nenhum recebimento neste mês.";
+    list.innerHTML = payments.length
+      ? payments.map(({ entry, pay }) => {
+        const client = resolveFiadoClient(entry);
+        return `
+          <article class="fiado-queue-row">
+            <div class="fiado-queue-main">
+              <div class="fiado-queue-top">
+                <strong>${text(client.name)}</strong>
+                <span class="fiado-queue-balance is-in">${money(pay.amount)}</span>
+              </div>
+              <p class="fiado-queue-meta">${text(entry.productName)} · ${text(formatDate(pay.paidAt))}${pay.note ? ` · ${text(pay.note)}` : ""}</p>
+            </div>
+            <div class="fiado-queue-actions">
+              <button type="button" class="icon-btn" data-edit-fiado="${text(entry.id)}" aria-label="Editar fiado de ${text(client.name)}">${FIADO_ICONS.edit}</button>
+            </div>
+          </article>`;
+      }).join("")
+      : "<p class='panel-hint'>Nenhum abatimento caiu neste mês.</p>";
+    return;
+  }
+
+  if (fiadoView === "abater") {
+    const rows = open.slice().sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+    meta.textContent = rows.length
+      ? `${rows.length} saldo${rows.length === 1 ? "" : "s"} em aberto`
+      : "Nenhum saldo em aberto.";
+    list.innerHTML = rows.length
+      ? rows.map((entry) => fiadoQueueRow(entry, "abater")).join("")
+      : "<p class='panel-hint'>Nada para abater.</p>";
+    return;
+  }
+
+  const blocks = [];
+  if (overdue.length) {
+    blocks.push(`<p class="fiado-queue-label">Vencidos · ${overdue.length}</p>`);
+    blocks.push(overdue.map((entry) => fiadoQueueRow(entry, "cobrar")).join(""));
+  }
+  if (soon.length) {
+    blocks.push(`<p class="fiado-queue-label">Vence em 7 dias · ${soon.length}</p>`);
+    blocks.push(soon.map((entry) => fiadoQueueRow(entry, "cobrar")).join(""));
+  }
+  const waiting = open.length - overdue.length - soon.length;
+  meta.textContent = overdue.length || soon.length
+    ? `${overdue.length} vencido${overdue.length === 1 ? "" : "s"} · ${soon.length} vence em 7 dias`
+    : "Nada para cobrar agora.";
+  if (!blocks.length) {
+    blocks.push("<p class='panel-hint'>Nenhum vencido e nada vence nos próximos 7 dias.</p>");
+  }
+  if (waiting > 0) {
+    blocks.push(`<button type="button" class="fiado-jump" data-fiado-view="abater">${waiting} em aberto · ver saldos</button>`);
+  }
+  list.innerHTML = blocks.join("");
 }
 
 function renderFiado() {
   const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
   const overdueItems = openItems.filter((item) => item.status === "overdue");
-  const dueSoon = openItems.filter((item) => {
-    if (!item.nextDueDate || item.status === "overdue") return false;
-    const due = new Date(`${item.nextDueDate}T12:00:00`);
-    const limit = new Date();
-    limit.setDate(limit.getDate() + 7);
-    return due <= limit;
-  });
+  const dueSoon = openItems.filter(isDueSoon);
   const receivable = openItems.reduce((sum, item) => sum + Number(item.balance || 0), 0);
-  const monthKey = new Date().toISOString().slice(0, 7);
-  const receivedMonth = (catalog.fiado || []).reduce((sum, entry) => {
-    const payments = (entry.payments || []).filter((pay) => (pay.paidAt || "").slice(0, 7) === monthKey);
-    return sum + payments.reduce((acc, pay) => acc + Number(pay.amount || 0), 0);
-  }, 0);
+  const receivedMonth = fiadoMonthPayments().reduce((sum, row) => sum + Number(row.pay.amount || 0), 0);
+  const openClients = (catalog.clients || []).filter((client) => clientLedger(client.id).balance > 0).length;
 
-  document.getElementById("fiado-summary").innerHTML = `
-    <div class="stat-card stat-card--receivable"><span>A receber</span><strong>${money(receivable)}</strong></div>
-    <div class="stat-card stat-card--overdue"><span>Vencidos</span><strong>${overdueItems.length}</strong></div>
-    <div class="stat-card stat-card--due-soon"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></div>
-    <div class="stat-card stat-card--received"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></div>
-  `;
+  const summary = document.getElementById("fiado-summary");
+  if (summary) {
+    summary.innerHTML = `
+      <button type="button" class="fiado-kpi is-receivable${fiadoView === "abater" ? " is-active" : ""}" data-fiado-view="abater"><span>A receber</span><strong>${money(receivable)}</strong></button>
+      <button type="button" class="fiado-kpi is-overdue${fiadoView === "cobrar" ? " is-active" : ""}" data-fiado-view="cobrar"><span>Vencidos</span><strong>${overdueItems.length}</strong></button>
+      <button type="button" class="fiado-kpi is-soon" data-fiado-view="cobrar"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></button>
+      <button type="button" class="fiado-kpi is-received${fiadoView === "recebido" ? " is-active" : ""}" data-fiado-view="recebido"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></button>
+    `;
+  }
 
-  renderFiadoFilters();
+  renderFiadoDock(overdueItems.length + dueSoon.length, openItems.length, openClients);
+  applyFiadoView();
   fillClientSelects();
   fillFiadoProducts(lastFiadoProductId);
   renderClients();
-
-  const rows = filteredFiado();
-  document.getElementById("fiado-result-meta").textContent = rows.length
-    ? `${rows.length} fiado${rows.length === 1 ? "" : "s"} nesta visão`
-    : "Nenhum fiado nesta visão.";
-
-  renderFiadoAlerts();
-
-  document.getElementById("fiado-list").innerHTML = rows.length
-    ? rows.map((entry) => renderFiadoCard(entry)).join("")
-    : "<p class='panel-hint'>Nenhum fiado registrado ainda.</p>";
+  renderFiadoQueue(openItems, overdueItems, dueSoon);
 }
 
 function openClient(client) {
@@ -975,6 +1200,7 @@ function openClient(client) {
   form.elements.id.value = client?.id || "";
   form.elements.name.value = client?.name || "";
   form.elements.phone.value = client?.phone || "";
+  form.elements.address.value = client?.address || "";
   form.elements.notes.value = client?.notes || "";
   document.getElementById("client-dialog").showModal();
 }
@@ -1132,6 +1358,9 @@ function openProduct(product) {
   productForm.elements.priceMin.value = product?.priceMin ?? "";
   productForm.elements.priceMax.value = product?.priceMax ?? "";
   productForm.elements.priceList.value = product?.priceList ?? "";
+  productForm.elements.cost.value = product?.cost ?? 0;
+  productForm.elements.sku.value = product?.sku || "";
+  productForm.elements.active.checked = product ? product.active !== false : true;
   productForm.elements.image.value = product?.image || "";
   productForm.elements.variants.value = (product?.thickness || []).join(", ");
   productForm.elements.description.value = product?.description || "";
@@ -1332,7 +1561,16 @@ document.getElementById("sales-category-filters").addEventListener("click", (eve
   renderSales();
 });
 
-document.getElementById("new-client-btn").addEventListener("click", () => openClient(null));
+document.getElementById("tab-fiado").addEventListener("click", (event) => {
+  if (event.target.closest("[data-new-client]")) {
+    openClient(null);
+    return;
+  }
+  const jump = event.target.closest("[data-fiado-view]");
+  if (!jump) return;
+  fiadoView = jump.dataset.fiadoView;
+  renderFiado();
+});
 document.getElementById("cancel-client").addEventListener("click", () => document.getElementById("client-dialog").close());
 document.getElementById("cancel-payment").addEventListener("click", () => document.getElementById("payment-dialog").close());
 document.getElementById("cancel-fiado-edit").addEventListener("click", () => document.getElementById("fiado-edit-dialog").close());
@@ -1384,6 +1622,13 @@ document.getElementById("fiado-edit-form").addEventListener("submit", async (eve
 });
 document.getElementById("client-search").addEventListener("input", (event) => {
   clientSearchQuery = event.target.value;
+  renderClients();
+});
+
+document.getElementById("client-filters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-client-filter]");
+  if (!button) return;
+  clientListFilter = button.dataset.clientFilter;
   renderClients();
 });
 
@@ -1459,17 +1704,21 @@ document.getElementById("fiado-form").addEventListener("submit", async (event) =
     lastFiadoProductId = payload.productId;
     event.target.elements.downPayment.value = 0;
     event.target.elements.notes.value = "";
+    fiadoView = "cobrar";
     await loadCatalog();
   } catch (error) {
     showError(fiadoError, error.message);
   }
 });
 
-document.getElementById("fiado-status-filters").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-fiado-status]");
-  if (!button) return;
-  fiadoFilter.status = button.dataset.fiadoStatus;
-  renderFiado();
+document.getElementById("fiado-search").addEventListener("input", (event) => {
+  fiadoSearchQuery = event.target.value;
+  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
+  renderFiadoQueue(
+    openItems,
+    openItems.filter((item) => item.status === "overdue"),
+    openItems.filter(isDueSoon)
+  );
 });
 
 document.getElementById("fiado-alerts").addEventListener("click", (event) => {
@@ -1694,7 +1943,8 @@ async function registerSale() {
       body: JSON.stringify({
         productId: payload.productId,
         quantity,
-        unitPrice
+        unitPrice,
+        paymentMethod: payload.paymentMethod || ""
       })
     });
     lastSaleProductId = payload.productId;

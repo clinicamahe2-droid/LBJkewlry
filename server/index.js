@@ -39,12 +39,17 @@ function sessionSecret() {
 }
 
 function loadEnvFile() {
-  const envPath = path.join(ROOT, ".env");
-  if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (!match || process.env[match[1]]) continue;
-    process.env[match[1]] = match[2].replace(/^["']|["']$/g, "");
+  const candidates = [
+    path.join(ROOT, ".env"),
+    path.join(ROOT, ".env", "env.txt")
+  ];
+  for (const envPath of candidates) {
+    if (!fs.existsSync(envPath) || fs.statSync(envPath).isDirectory()) continue;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!match || process.env[match[1]]) continue;
+      process.env[match[1]] = match[2].replace(/^["']|["']$/g, "");
+    }
   }
 }
 
@@ -454,6 +459,18 @@ async function createApp() {
 
   app.get("/admin", (_req, res) => {
     res.sendFile(path.join(SITE_DIR, "admin.html"));
+  });
+
+  app.get("/admin-manifest.json", (_req, res) => {
+    res.set("Content-Type", "application/manifest+json; charset=utf-8");
+    res.sendFile(path.join(SITE_DIR, "admin-manifest.json"));
+  });
+
+  app.get("/sw-admin.js", (_req, res) => {
+    res.set("Service-Worker-Allowed", "/");
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.type("js");
+    res.sendFile(path.join(SITE_DIR, "sw-admin.js"));
   });
 
   app.use("/assets/uploads", express.static(UPLOAD_DIR));

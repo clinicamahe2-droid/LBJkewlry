@@ -16,7 +16,10 @@ create table if not exists products (
   images jsonb not null default '[]'::jsonb,
   thickness jsonb not null default '[]'::jsonb,
   description text default '',
-  details jsonb not null default '[]'::jsonb
+  details jsonb not null default '[]'::jsonb,
+  cost numeric not null default 0,
+  sku text default '',
+  active boolean not null default true
 );
 
 create table if not exists banners (
@@ -34,6 +37,7 @@ create table if not exists clients (
   name text not null,
   phone text not null,
   notes text default '',
+  address text default '',
   created_at timestamptz not null default now()
 );
 
@@ -49,6 +53,9 @@ create table if not exists sales (
   unit_price numeric not null default 0,
   total numeric not null default 0,
   paid_at_sale numeric,
+  unit_cost numeric not null default 0,
+  payment_method text default '',
+  notes text default '',
   created_at timestamptz not null default now()
 );
 
@@ -68,6 +75,8 @@ create table if not exists fiado (
   installment_amount numeric,
   status text not null default 'open',
   notes text default '',
+  unit_cost numeric not null default 0,
+  payment_method text default '',
   payments jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -114,3 +123,14 @@ create table if not exists settings (
 alter table fiado enable row level security;
 alter table prospects enable row level security;
 alter table settings enable row level security;
+
+-- Bancos já criados: acrescenta custo e campos do VendaFácil
+alter table products add column if not exists cost numeric not null default 0;
+alter table products add column if not exists sku text default '';
+alter table products add column if not exists active boolean not null default true;
+alter table clients add column if not exists address text default '';
+alter table sales add column if not exists unit_cost numeric not null default 0;
+alter table sales add column if not exists payment_method text default '';
+alter table sales add column if not exists notes text default '';
+alter table fiado add column if not exists unit_cost numeric not null default 0;
+alter table fiado add column if not exists payment_method text default '';

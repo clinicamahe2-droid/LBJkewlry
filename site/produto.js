@@ -26,8 +26,10 @@
     const displayPrice = product.priceList || product.priceMax;
     const hasSale = Boolean(product.priceList && product.priceList > product.priceMax);
     const hasRange = product.priceMin !== product.priceMax;
+    const variants = (product.thickness || []).filter((value) => value && value !== "Único");
     const variantLabel = product.categorySlug === "aneis" ? "Numeração" : "Espessura aprox";
     const images = product.images?.length ? product.images : [product.image];
+    const detailLines = (product.details || []).filter((item) => item && !/importado do vendafácil|venda importada/i.test(item));
 
     root.innerHTML = `
       <div class="container">
@@ -42,11 +44,6 @@
         <div class="pdp-grid">
           <section class="pdp-gallery" aria-label="Imagens do produto">
             <div class="pdp-main-image">
-              <button class="pdp-favorite" type="button" aria-label="Favoritar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.5-7 10-7 10z" stroke="currentColor" stroke-width="1.5"/>
-                </svg>
-              </button>
               <img id="pdp-main-img" src="${escapeHtml(images[0])}" alt="${escapeHtml(product.name)}">
             </div>
             <div class="pdp-thumbs">
@@ -71,55 +68,38 @@
               ${Number(product.stock) <= 0 ? `<p class="pdp-stock-note">Peça indisponível no momento.</p>` : ""}
             </div>
 
+            ${variants.length ? `
             <div class="pdp-variant">
               <span class="pdp-variant-label">${variantLabel}</span>
               <div class="pdp-variant-options">
-                ${(product.thickness || []).map((value, index) => `
+                ${variants.map((value, index) => `
                   <button type="button" class="pdp-variant-btn${index === 0 ? " is-active" : ""}">${escapeHtml(value)}</button>
                 `).join("")}
               </div>
-            </div>
+            </div>` : ""}
 
-            <button class="pdp-size-guide" type="button">Guia de tamanhos</button>
             <a class="pdp-add-cart" href="${STORE_WHATSAPP_URL}" target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
 
+            ${product.description || detailLines.length ? `
             <div class="pdp-accordions">
               <details class="pdp-accordion" open>
                 <summary>Detalhes</summary>
                 <div class="pdp-accordion-body">
-                  <p>${escapeHtml(product.description)}</p>
-                  <ul>${(product.details || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+                  ${product.description ? `<p>${escapeHtml(product.description)}</p>` : ""}
+                  ${detailLines.length ? `<ul>${detailLines.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
                 </div>
               </details>
-              <details class="pdp-accordion">
-                <summary>Certificação e Garantias</summary>
-                <div class="pdp-accordion-body">
-                  <ul>
-                    <li>Certificado de Garantia LB jewelry</li>
-                    <li>Embalagem para presente</li>
-                    <li>Sustentabilidade: matéria-prima rastreada e certificada</li>
-                  </ul>
-                </div>
-              </details>
-              <details class="pdp-accordion">
-                <summary>Troca e Devolução</summary>
-                <div class="pdp-accordion-body">
-                  <ul>
-                    <li>Troca gratuita em até 30 dias</li>
-                    <li>Devolução gratuita em até 7 dias após o recebimento</li>
-                  </ul>
-                </div>
-              </details>
-            </div>
+            </div>` : ""}
           </section>
         </div>
 
+        ${related.length ? `
         <section class="pdp-related">
           <h2>Você também pode gostar</h2>
           <div class="product-grid">
             ${related.map(productCardHtml).join("")}
           </div>
-        </section>
+        </section>` : ""}
       </div>`;
 
     const mainImg = document.getElementById("pdp-main-img");
@@ -152,7 +132,7 @@
         return;
       }
       const related = catalog.products
-        .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id)
+        .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id && item.showOnHome !== false)
         .slice(0, 4);
       render(product, related);
     })

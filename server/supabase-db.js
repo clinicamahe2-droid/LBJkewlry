@@ -6,8 +6,8 @@ function throwIfError(error) {
   }
 }
 
-function productToRow(product) {
-  return {
+function productToRow(product, columns = {}) {
+  const row = {
     id: product.id,
     name: product.name,
     category: product.category,
@@ -25,6 +25,10 @@ function productToRow(product) {
     description: product.description || "",
     details: product.details || []
   };
+  if (columns.cost) row.cost = Number(product.cost) || 0;
+  if (columns.sku) row.sku = product.sku || "";
+  if (columns.active) row.active = product.active !== false;
+  return row;
 }
 
 function productFromRow(row) {
@@ -44,7 +48,10 @@ function productFromRow(row) {
     images: row.images || [],
     thickness: row.thickness || [],
     description: row.description || "",
-    details: row.details || []
+    details: row.details || [],
+    cost: row.cost != null ? Number(row.cost) : 0,
+    sku: row.sku || "",
+    active: row.active !== false
   };
 }
 
@@ -82,18 +89,25 @@ function clientToRow(client) {
   };
 }
 
+function clientToRowWithColumns(client, columns = {}) {
+  const row = clientToRow(client);
+  if (columns.address) row.address = client.address || "";
+  return row;
+}
+
 function clientFromRow(row) {
   return {
     id: row.id,
     name: row.name,
     phone: row.phone,
     notes: row.notes || "",
+    address: row.address || "",
     createdAt: row.created_at
   };
 }
 
-function saleToRow(sale) {
-  return {
+function saleToRow(sale, columns = {}) {
+  const row = {
     id: sale.id,
     type: sale.type || "cash",
     fiado_id: sale.fiadoId || null,
@@ -107,6 +121,10 @@ function saleToRow(sale) {
     paid_at_sale: sale.paidAtSale ?? null,
     created_at: sale.createdAt || new Date().toISOString()
   };
+  if (columns.unitCost) row.unit_cost = Number(sale.unitCost) || 0;
+  if (columns.paymentMethod) row.payment_method = sale.paymentMethod || "";
+  if (columns.notes) row.notes = sale.notes || "";
+  return row;
 }
 
 function saleFromRow(row) {
@@ -122,12 +140,15 @@ function saleFromRow(row) {
     unitPrice: Number(row.unit_price),
     total: Number(row.total),
     paidAtSale: row.paid_at_sale != null ? Number(row.paid_at_sale) : undefined,
+    unitCost: row.unit_cost != null ? Number(row.unit_cost) : 0,
+    paymentMethod: row.payment_method || "",
+    notes: row.notes || "",
     createdAt: row.created_at
   };
 }
 
-function fiadoToRow(entry) {
-  return {
+function fiadoToRow(entry, columns = {}) {
+  const row = {
     id: entry.id,
     client_id: entry.clientId || null,
     client_name: entry.clientName,
@@ -146,6 +167,9 @@ function fiadoToRow(entry) {
     payments: entry.payments || [],
     created_at: entry.createdAt || new Date().toISOString()
   };
+  if (columns.unitCost) row.unit_cost = Number(entry.unitCost) || 0;
+  if (columns.paymentMethod) row.payment_method = entry.paymentMethod || "";
+  return row;
 }
 
 function fiadoFromRow(row) {
@@ -165,6 +189,8 @@ function fiadoFromRow(row) {
     installmentAmount: row.installment_amount != null ? Number(row.installment_amount) : 0,
     status: row.status || "open",
     notes: row.notes || "",
+    unitCost: row.unit_cost != null ? Number(row.unit_cost) : 0,
+    paymentMethod: row.payment_method || "",
     payments: row.payments || [],
     createdAt: row.created_at
   };
@@ -190,24 +216,110 @@ function prospectFromRow(row) {
   };
 }
 
-async function syncTable(table, rows, mapRow) {
-  const supabase = getSupabase();
+const columnCache = new Map();
+
+async function hasColumn(table, column) {
+  const key = `${table}.${column}`;
+  if (columnCache.has(key)) return columnCache.get(key);
+  const { error } = await getSupabase().from(table).select(column).limit(1);
+  const ok = !error;
+  columnCache.set(key, ok);
+  return ok;
+}
+
+function collectOpsExtras(catalog) {
+  return {
+    products: Object.fromEntries((catalog.products || []).map((product) => [
+      product.id,
+      {
+        cost: Number(product.cost) || 0,
+        sku: product.sku || "",
+        active: product.active !== false
+      }
+    ])),
+    sales: Object.fromEntries((catalog.sales || []).map((sale) => [
+      sale.id,
+      {
+        unitCost: Number(sale.unitCost) || 0,
+        paymentMethod: sale.paymentMethod || "",
+        notes: sale.notes || ""
+      }
+    ])),
+    fiado: Object.fromEntries((catalog.fiado || []).map((entry) => [
+      entry.id,
+      {
+        unitCost: Number(entry.unitCost) || 0,
+        paymentMethod: entry.paymentMethod || ""
+      }
+    ])),
+    clients: Object.fromEntries((catalog.clients || []).map((client) => [
+      client.id,
+      { address: client.address || "" }
+    ]))
+  };
+}
+
+function preferNumber(primary, fallback) {
+  const first = Number(primary);
+  if (Number.isFinite(first) && first > 0) return first;
+  const second = Number(fallback);
+  return Number.isFinite(second) ? second : 0;
+}
+
+function applyOpsExtras(catalog, extras) {
+  if (!extras || typeof extras !== "object") return catalog;
+  catalog.products = (catalog.products || []).map((product) => {
+    const extra = extras.products?.[product.id] || {};
+    return {
+      ...product,
+      cost: preferNumber(product.cost, extra.cost),
+      sku: product.sku || extra.sku || "",
+      active: product.active !== false && extra.active !== false
+    };
+  });
+  catalog.sales = (catalog.sales || []).map((sale) => {
+    const extra = extras.sales?.[sale.id] || {};
+    return {
+      ...sale,
+      unitCost: preferNumber(sale.unitCost, extra.unitCost),
+      paymentMethod: sale.paymentMethod || extra.paymentMethod || "",
+      notes: sale.notes || extra.notes || ""
+    };
+  });
+  catalog.fiado = (catalog.fiado || []).map((entry) => {
+    const extra = extras.fiado?.[entry.id] || {};
+    return {
+      ...entry,
+      unitCost: preferNumber(entry.unitCost, extra.unitCost),
+      paymentMethod: entry.paymentMethod || extra.paymentMethod || ""
+    };
+  });
+  catalog.clients = (catalog.clients || []).map((client) => {
+    const extra = extras.clients?.[client.id] || {};
+    return {
+      ...client,
+      address: client.address || extra.address || ""
+    };
+  });
+  return catalog;
+}
+
+async function upsertRows(table, rows, mapRow) {
   const payload = rows.map(mapRow);
-  const ids = payload.map((row) => row.id);
+  if (!payload.length) return payload.map((row) => row.id);
+  const { error } = await getSupabase().from(table).upsert(payload, { onConflict: "id" });
+  throwIfError(error);
+  return payload.map((row) => row.id);
+}
 
-  if (payload.length) {
-    const { error } = await supabase.from(table).upsert(payload, { onConflict: "id" });
-    throwIfError(error);
-  }
-
-  const { data: existing, error: listError } = await supabase.from(table).select("id");
+async function pruneRows(table, ids) {
+  const { data: existing, error: listError } = await getSupabase().from(table).select("id");
   throwIfError(listError);
-
-  const toDelete = (existing || []).map((row) => row.id).filter((id) => !ids.includes(id));
-  if (toDelete.length) {
-    const { error: deleteError } = await supabase.from(table).delete().in("id", toDelete);
-    throwIfError(deleteError);
-  }
+  const keep = new Set(ids);
+  const toDelete = (existing || []).map((row) => row.id).filter((id) => !keep.has(id));
+  if (!toDelete.length) return;
+  const { error: deleteError } = await getSupabase().from(table).delete().in("id", toDelete);
+  throwIfError(deleteError);
 }
 
 async function loadCatalogFromSupabase() {
@@ -219,7 +331,7 @@ async function loadCatalogFromSupabase() {
     supabase.from("sales").select("*").order("created_at", { ascending: false }),
     supabase.from("fiado").select("*").order("created_at", { ascending: false }),
     supabase.from("prospects").select("*").order("created_at", { ascending: false }),
-    supabase.from("settings").select("key, value").eq("key", "promo_popup").maybeSingle()
+    supabase.from("settings").select("key, value").in("key", ["promo_popup", "ops_extras"])
   ]);
 
   throwIfError(productsRes.error);
@@ -230,32 +342,63 @@ async function loadCatalogFromSupabase() {
   throwIfError(prospectsRes.error);
   throwIfError(settingsRes.error);
 
-  return {
+  const settings = Object.fromEntries((settingsRes.data || []).map((row) => [row.key, row.value]));
+  return applyOpsExtras({
     products: (productsRes.data || []).map(productFromRow),
     banners: (bannersRes.data || []).map(bannerFromRow),
     clients: (clientsRes.data || []).map(clientFromRow),
     sales: (salesRes.data || []).map(saleFromRow),
     fiado: (fiadoRes.data || []).map(fiadoFromRow),
     prospects: (prospectsRes.data || []).map(prospectFromRow),
-    promoPopup: settingsRes.data?.value || null
-  };
+    promoPopup: settings.promo_popup || null
+  }, settings.ops_extras);
 }
 
 async function saveCatalogToSupabase(catalog) {
   const supabase = getSupabase();
-  await syncTable("clients", catalog.clients || [], clientToRow);
-  await syncTable("products", catalog.products || [], productToRow);
-  await syncTable("banners", catalog.banners || [], bannerToRow);
-  await syncTable("fiado", catalog.fiado || [], (entry) => fiadoToRow(entry));
-  await syncTable("sales", catalog.sales || [], saleToRow);
-  await syncTable("prospects", catalog.prospects || [], prospectToRow);
+  const [productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay] = await Promise.all([
+    hasColumn("products", "cost"),
+    hasColumn("products", "sku"),
+    hasColumn("products", "active"),
+    hasColumn("clients", "address"),
+    hasColumn("sales", "unit_cost"),
+    hasColumn("sales", "payment_method"),
+    hasColumn("sales", "notes"),
+    hasColumn("fiado", "unit_cost"),
+    hasColumn("fiado", "payment_method")
+  ]);
+
+  const clientIds = await upsertRows("clients", catalog.clients || [], (client) => clientToRowWithColumns(client, { address: clientAddress }));
+  const productIds = await upsertRows("products", catalog.products || [], (product) => productToRow(product, {
+    cost: productCost,
+    sku: productSku,
+    active: productActive
+  }));
+  const bannerIds = await upsertRows("banners", catalog.banners || [], bannerToRow);
+  const fiadoIds = await upsertRows("fiado", catalog.fiado || [], (entry) => fiadoToRow(entry, {
+    unitCost: fiadoCost,
+    paymentMethod: fiadoPay
+  }));
+  const saleIds = await upsertRows("sales", catalog.sales || [], (sale) => saleToRow(sale, {
+    unitCost: saleCost,
+    paymentMethod: salePay,
+    notes: saleNotes
+  }));
+  const prospectIds = await upsertRows("prospects", catalog.prospects || [], prospectToRow);
+
+  await pruneRows("sales", saleIds);
+  await pruneRows("fiado", fiadoIds);
+  await pruneRows("clients", clientIds);
+  await pruneRows("products", productIds);
+  await pruneRows("banners", bannerIds);
+  await pruneRows("prospects", prospectIds);
+
+  const settings = [{ key: "ops_extras", value: collectOpsExtras(catalog) }];
   if (catalog.promoPopup) {
-    const { error } = await supabase.from("settings").upsert({
-      key: "promo_popup",
-      value: catalog.promoPopup
-    }, { onConflict: "key" });
-    throwIfError(error);
+    settings.push({ key: "promo_popup", value: catalog.promoPopup });
   }
+  const { error } = await supabase.from("settings").upsert(settings, { onConflict: "key" });
+  throwIfError(error);
 }
 
 module.exports = {

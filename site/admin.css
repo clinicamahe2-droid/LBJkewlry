@@ -76,6 +76,21 @@ dialog h2,
   margin-bottom: 1.25rem;
 }
 
+.login-pwa-hint {
+  margin-top: 0.85rem;
+  color: #5c5c5c;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 1.45;
+}
+
+#install-pwa-btn {
+  background: transparent;
+  color: #8a6d2e;
+  border-color: rgba(176, 141, 58, 0.45);
+}
+
 label {
   display: block;
   font-size: 0.75rem;
@@ -786,21 +801,421 @@ dialog::backdrop {
   font-size: 0.95rem;
 }
 
-.fiado-layout {
+#tab-fiado {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fiado-kpis {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 1rem;
-  margin-bottom: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.fiado-kpi {
+  min-width: 0;
+  text-align: left;
+  background: #fff;
+  color: #161616;
+  border: 1px solid #d8d4cc;
+  padding: 0.6rem 0.65rem;
+  letter-spacing: 0.04em;
+}
+
+.fiado-kpi span {
+  display: block;
+  font-size: 0.62rem;
+  color: #5c5c5c;
+}
+
+.fiado-kpi strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: Oswald, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fiado-kpi.is-receivable { background: #eef4fb; border-color: #9ec5eb; }
+.fiado-kpi.is-receivable strong { color: #1a4d8c; }
+.fiado-kpi.is-overdue { background: #fdf0f0; border-color: #e8a8a8; }
+.fiado-kpi.is-overdue strong { color: #8a2b2b; }
+.fiado-kpi.is-soon { background: #fff8e8; border-color: #e8c878; }
+.fiado-kpi.is-soon strong { color: #9a6700; }
+.fiado-kpi.is-received { background: #eef8f1; border-color: #9fd4b0; }
+.fiado-kpi.is-received strong { color: #1f6b3a; }
+
+.fiado-kpi.is-active {
+  outline: 2px solid #1a4d8c;
+  outline-offset: -2px;
+}
+
+.fiado-dock {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0.7rem 0 0.85rem;
+}
+
+.fiado-dock button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 4.35rem;
+  min-width: 0;
+  padding: 0.4rem 0.15rem;
+  background: #fff;
+  color: #3a3a3a;
+  border: 1px solid #d8d4cc;
+  letter-spacing: 0.03em;
+  font-size: 0.62rem;
+}
+
+.fiado-dock button span:last-child {
+  white-space: nowrap;
+}
+
+.fiado-dock button.is-active {
+  color: #1a4d8c;
+  border-color: #1a4d8c;
+  background: #eef4fb;
+}
+
+.fiado-dock svg {
+  display: block;
+}
+
+.dock-badge {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.22rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.22rem;
+  border-radius: 999px;
+  background: #1a4d8c;
+  color: #fff;
+  font-size: 0.62rem;
+  line-height: 1.05rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dock-badge.is-hot {
+  background: #8a2b2b;
+}
+
+#fiado-search {
+  margin-bottom: 0.45rem;
+}
+
+.fiado-queue {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.fiado-queue-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6560;
+}
+
+.fiado-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.6rem 0.65rem;
+  background: #fff;
+  border: 1px solid #d8d4cc;
+}
+
+.fiado-queue-row.is-overdue {
+  box-shadow: inset 3px 0 0 #9b2c2c;
+}
+
+.fiado-queue-row.is-soon {
+  box-shadow: inset 3px 0 0 #c4a15a;
+}
+
+.fiado-queue-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fiado-queue-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.fiado-queue-top strong {
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.fiado-queue-balance {
+  flex: 0 0 auto;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fiado-queue-balance.is-in {
+  color: #1f6b3a;
+}
+
+.fiado-queue-meta {
+  margin: 0.1rem 0 0;
+  color: #6b6560;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fiado-queue-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.28rem;
+}
+
+@media (max-width: 420px) {
+  .fiado-queue-row {
+    flex-wrap: wrap;
+  }
+
+  .fiado-queue-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.icon-btn {
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #161616;
+  border: 1px solid #d8d4cc;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.icon-btn--pay {
+  background: #161616;
+  color: #fff;
+  border-color: #161616;
+}
+
+.icon-btn--wa {
+  color: #1f6b3a;
+  border-color: #9fd4b0;
+  background: #eef8f1;
+}
+
+.icon-btn--danger {
+  color: #8a2b2b;
+  border-color: #e8a8a8;
+  background: #fff;
+}
+
+.fiado-jump {
+  justify-self: start;
+  width: auto;
+  margin-top: 0.15rem;
+  padding: 0.35rem 0;
+  background: transparent;
+  color: #1a4d8c;
+  border-color: transparent;
+  letter-spacing: 0.03em;
+}
+
+.fiado-form.fiado-block {
+  padding: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .fiado-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fiado-clients {
+  margin-bottom: 0.75rem;
+}
+
+#tab-fiado .panel-head--compact {
+  flex-direction: row;
+  align-items: center;
+}
+
+#tab-fiado .panel-head--compact button {
+  width: auto;
+  align-self: center;
+  padding: 0.45rem 0.7rem;
 }
 
 .fiado-block {
   background: #fff;
   border: 1px solid #d8d4cc;
-  padding: 1rem;
+  padding: 0.85rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .fiado-block input[type="search"] {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.fiado-compose {
+  border: 1px solid #d8d4cc;
+  background: #fff;
+  margin-bottom: 1.25rem;
+}
+
+.fiado-compose summary {
+  cursor: pointer;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.9rem;
+  list-style: none;
+}
+
+.fiado-compose summary::-webkit-details-marker {
+  display: none;
+}
+
+.fiado-compose summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1rem;
+  color: #6b6560;
+}
+
+.fiado-compose[open] summary::before {
+  content: "–";
+}
+
+.fiado-form {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0 0.9rem 0.9rem;
+}
+
+.fiado-form button.primary {
+  justify-self: start;
+}
+
+.client-list {
+  display: grid;
+}
+
+.client-row {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.15rem 0.7rem 0.65rem;
+  border-top: 1px solid #ece8e1;
+}
+
+.client-row.is-overdue {
+  box-shadow: inset 3px 0 0 #9b2c2c;
+}
+
+.client-row.is-open {
+  box-shadow: inset 3px 0 0 #c4a15a;
+}
+
+.client-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.client-row-top strong {
+  min-width: 0;
+  font-size: 0.95rem;
+}
+
+.client-row-meta {
+  margin: 0;
+  color: #6b6560;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+#client-filters {
+  width: 100%;
+  max-width: 100%;
+}
+
+.client-phone {
+  color: #1f6b3a;
+  text-decoration: none;
+}
+
+.client-balance,
+.client-clear {
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.client-balance {
+  font-weight: 600;
+}
+
+.client-clear {
+  color: #6b6560;
+  font-weight: 500;
+}
+
+.client-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.client-notes {
+  margin-top: 0.2rem;
+}
+
+.client-notes summary {
+  cursor: pointer;
+  color: #6b6560;
+  font-size: 0.75rem;
+}
+
+.client-notes p {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  font-size: 0.8rem;
+}
+
+@media (min-width: 720px) {
+  .fiado-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fiado-form button.primary,
+  .fiado-form label:last-of-type {
+    grid-column: 1 / -1;
+  }
 }
 
 .fiado-alerts {
@@ -1280,10 +1695,6 @@ dialog::backdrop {
 }
 
 @media (max-width: 768px) {
-  .fiado-layout {
-    grid-template-columns: 1fr;
-  }
-
   .sales-mode-tabs {
     width: 100%;
   }
@@ -1336,6 +1747,10 @@ dialog::backdrop {
     text-align: center;
     justify-content: center;
     line-height: 1.2;
+  }
+
+  #install-pwa-btn:not([hidden]) {
+    grid-column: 1 / -1;
   }
 
   .admin-tabs {

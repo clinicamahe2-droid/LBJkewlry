@@ -303,16 +303,23 @@ function normalizeProduct(input, existingId) {
   const priceMin = Math.max(0, toNumber(input.priceMin));
   const priceMax = Math.max(priceMin, toNumber(input.priceMax) || priceMin);
   const priceList = toNumber(input.priceList);
+  const cost = Math.max(0, toNumber(input.cost));
   const stock = Math.max(0, Math.floor(toNumber(input.stock)));
   const showOnHome =
     input.showOnHome === true ||
     input.showOnHome === "on" ||
     input.showOnHome === "true" ||
     input.showOnHome === "1";
+  const active =
+    input.active === true ||
+    input.active === "on" ||
+    input.active === "true" ||
+    input.active === "1";
 
   return {
     id: existingId || slugify(input.id || name),
     name,
+    sku: stripTags(input.sku),
     category: categoryMap[categorySlug],
     categorySlug,
     collection: stripTags(input.collection) || `Coleção ${categoryMap[categorySlug]}`,
@@ -320,8 +327,10 @@ function normalizeProduct(input, existingId) {
     priceMin,
     priceMax,
     priceList: priceList > priceMax ? priceList : undefined,
+    cost,
     stock,
     showOnHome,
+    active,
     image,
     images,
     thickness: variants.length ? variants : ["Único"],
@@ -334,7 +343,12 @@ async function publicCatalog() {
   const catalog = await loadCatalog();
   const popup = normalizePromoPopup(catalog.promoPopup);
   return {
-    products: catalog.products,
+    products: catalog.products
+      .filter((product) => product.active !== false)
+      .map((product) => {
+        const { cost, sku, active, ...publicProduct } = product;
+        return publicProduct;
+      }),
     banners: catalog.banners,
     promoPopup: popup.enabled
       ? {
@@ -359,6 +373,7 @@ function normalizeClient(input, existingId) {
     id: existingId || stripTags(input.id) || `client-${Date.now().toString(36)}`,
     name,
     phone,
+    address: stripTags(input.address),
     notes: stripTags(input.notes),
     createdAt: existingId
       ? stripTags(input.createdAt) || new Date().toISOString()
@@ -440,6 +455,8 @@ async function recordSale(input) {
     productName: product.name,
     quantity,
     unitPrice,
+    unitCost: Math.max(0, toNumber(product.cost)),
+    paymentMethod: stripTags(input.paymentMethod),
     total: unitPrice * quantity,
     createdAt: new Date().toISOString()
   };
@@ -497,6 +514,8 @@ async function recordFiadoSale(input) {
     nextDueDate: balance > 0 ? nextDueDate : "",
     installmentAmount: balance > 0 ? Math.max(0, toNumber(input.installmentAmount)) : 0,
     notes: stripTags(input.notes),
+    unitCost: Math.max(0, toNumber(product.cost)),
+    paymentMethod: stripTags(input.paymentMethod),
     payments,
     createdAt: now
   });
@@ -511,6 +530,8 @@ async function recordFiadoSale(input) {
     productName: product.name,
     quantity,
     unitPrice,
+    unitCost: Math.max(0, toNumber(product.cost)),
+    paymentMethod: stripTags(input.paymentMethod),
     total,
     paidAtSale: downPayment,
     createdAt: now
