@@ -19,9 +19,10 @@ const CATEGORIES = [
 
 let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [], prospects: [], promoPopup: {} };
 let productImages = [];
+let soldProductIds = new Set();
 const listFilter = {
-  products: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false },
-  stock: { category: "all", lowStock: false, homeOnly: false, out: false, promoOnly: false }
+  products: { category: "all", view: "available", promoOnly: false, homeOnly: false },
+  stock: { category: "all", view: "available" }
 };
 const salesFilter = { period: "all", category: "all" };
 const fiadoFilter = { status: "all" };
@@ -309,13 +310,24 @@ function matchesQuery(item, query) {
   return haystack.includes(query);
 }
 
-function filterItems(query, { category = "all", lowStock = false, homeOnly = false, out = false, promoOnly = false } = {}) {
+function refreshSoldIndex() {
+  soldProductIds = new Set(
+    (catalog.sales || []).map((sale) => sale.productId).filter(Boolean)
+  );
+}
+
+function isSoldOut(item) {
+  return Number(item.stock) <= 0 && soldProductIds.has(item.id);
+}
+
+function filterItems(query, { category = "all", lowStock = false, homeOnly = false, out = false, promoOnly = false, soldOnly = false } = {}) {
   return catalog.products.filter((item) => {
     if (category !== "all" && item.categorySlug !== category) return false;
     if (lowStock && (item.stock ?? 0) > 2) return false;
     if (out && (item.stock ?? 0) > 0) return false;
     if (homeOnly && item.showOnHome === false) return false;
     if (promoOnly && !isPromoProduct(item)) return false;
+    if (soldOnly && !isSoldOut(item)) return false;
     return matchesQuery(item, query);
   });
 }
@@ -329,19 +341,28 @@ function groupByCategory(items) {
     .filter((group) => group.items.length);
 }
 
-function renderFilterChips(containerId, state) {
-  const node = document.getElementById(containerId);
+function renderProductFilters() {
+  const node = document.getElementById("product-filters");
   if (!node) return;
-  const low = catalog.products.filter((item) => (item.stock ?? 0) <= 2).length;
-  const out = catalog.products.filter((item) => (item.stock ?? 0) <= 0).length;
-  const home = catalog.products.filter((item) => item.showOnHome !== false).length;
-  const promo = catalog.products.filter((item) => isPromoProduct(item)).length;
+  const state = listFilter.products;
+  const available = stockPool("available");
+  const sold = stockPool("sold");
+  const pool = state.view === "sold" ? sold : available;
+  const promo = pool.filter((item) => isPromoProduct(item)).length;
+  const home = pool.filter((item) => item.showOnHome !== false).length;
   node.innerHTML = `
+    <button type="button" data-view="available" class="${state.view !== "sold" ? "is-active" : ""}">
+      Disponíveis <span>${available.length}</span>
+    </button>
+    <button type="button" data-view="sold" class="${state.view === "sold" ? "is-active" : ""}">
+      Vendidos <span>${sold.length}</span>
+    </button>
     <button type="button" data-cat="all" class="${state.category === "all" ? "is-active" : ""}">
-      Todas <span>${catalog.products.length}</span>
+      Todas <span>${pool.length}</span>
     </button>
     ${CATEGORIES.map((cat) => {
-      const count = catalog.products.filter((item) => item.categorySlug === cat.slug).length;
+      const count = pool.filter((item) => item.categorySlug === cat.slug).length;
+      if (!count) return "";
       return `
         <button type="button" data-cat="${cat.slug}" class="${state.category === cat.slug ? "is-active" : ""}">
           ${cat.label} <span>${count}</span>
@@ -349,12 +370,6 @@ function renderFilterChips(containerId, state) {
     }).join("")}
     <button type="button" data-promo class="filter-chip--promo ${state.promoOnly ? "is-active" : ""}">
       Promoção <span>${promo}</span>
-    </button>
-    <button type="button" data-low class="${state.lowStock ? "is-active" : ""}">
-      Baixo <span>${low}</span>
-    </button>
-    <button type="button" data-out class="${state.out ? "is-active" : ""}">
-      Zerado <span>${out}</span>
     </button>
     <button type="button" data-home class="${state.homeOnly ? "is-active" : ""}">
       Na home <span>${home}</span>
@@ -365,12 +380,8 @@ function bindFilterBar(containerId, key, redraw) {
   document.getElementById(containerId).addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
-    if ("low" in button.dataset) {
-      listFilter[key].lowStock = !listFilter[key].lowStock;
-      if (listFilter[key].lowStock) listFilter[key].out = false;
-    } else if ("out" in button.dataset) {
-      listFilter[key].out = !listFilter[key].out;
-      if (listFilter[key].out) listFilter[key].lowStock = false;
+    if (button.dataset.view) {
+      listFilter[key].view = button.dataset.view;
     } else if ("home" in button.dataset) {
       listFilter[key].homeOnly = !listFilter[key].homeOnly;
     } else if ("promo" in button.dataset) {
@@ -460,10 +471,13 @@ function productMeta(item) {
   const price = hasSalePrice(item)
     ? `<span class="promo-price">${money(item.priceList)} → ${money(item.priceMax)}</span>`
     : `${money(item.priceMin)}${item.priceMin !== item.priceMax ? ` — ${money(item.priceMax)}` : ""}`;
-  const stockClass = item.stock <= 2 ? "stock-low" : "";
   const promoTag = isPromoProduct(item) ? ' · <span class="promo-tag">Promoção</span>' : "";
   const inactive = item.active === false ? " · Inativo" : "";
   const cost = Number(item.cost) > 0 ? ` · Custo ${money(item.cost)} · Margem ${money((item.priceMin || 0) - item.cost)}` : "";
+  if (isSoldOut(item)) {
+    return `${price}${cost} · <span class="sold-tag">Vendido</span>${promoTag}${inactive}`;
+  }
+  const stockClass = item.stock <= 2 ? "stock-low" : "";
   return `${price}${cost} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}${promoTag}${inactive}`;
 }
 
@@ -478,7 +492,7 @@ function renderPromoProducts() {
   const count = document.getElementById("promo-count");
   if (!list) return;
 
-  const promos = catalog.products.filter((item) => isPromoProduct(item));
+  const promos = catalog.products.filter((item) => isPromoProduct(item) && Number(item.stock) > 0);
   if (count) {
     count.textContent = promos.length
       ? `${promos.length} peça${promos.length === 1 ? "" : "s"}`
@@ -511,13 +525,17 @@ function renderPromoProducts() {
 }
 
 function renderProducts() {
+  const state = listFilter.products;
   const query = productSearch.value.trim().toLowerCase();
-  const rows = filterItems(query, listFilter.products);
-  renderFilterChips("product-filters", listFilter.products);
+  const rows = stockPool(state.view)
+    .filter((item) => state.category === "all" || item.categorySlug === state.category)
+    .filter((item) => !state.promoOnly || isPromoProduct(item))
+    .filter((item) => !state.homeOnly || item.showOnHome !== false)
+    .filter((item) => matchesQuery(item, query))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt"));
+  renderProductFilters();
   const meta = document.getElementById("product-result-meta");
-  meta.textContent = rows.length
-    ? `${rows.length} peça${rows.length === 1 ? "" : "s"} nesta visão`
-    : "";
+  meta.textContent = stockResultLabel(rows.length, state.view);
 
   if (!rows.length) {
     productList.innerHTML = "<p class='panel-hint'>Nenhum produto encontrado neste filtro.</p>";
@@ -533,7 +551,7 @@ function renderProducts() {
       </header>
       <div class="item-list">
         ${group.items.map((item) => `
-          <article class="item-card${isPromoProduct(item) ? " item-card--promo" : ""}">
+          <article class="item-card${isPromoProduct(item) ? " item-card--promo" : ""}${isSoldOut(item) ? " item-card--sold" : ""}">
             <img class="thumb" src="${text(item.image)}" alt="">
             <div class="item-card-body">
               <h4>${text(item.name)}</h4>
@@ -716,25 +734,75 @@ function renderBanners() {
   `).join("");
 }
 
+function stockPool(view) {
+  return catalog.products.filter((item) => (
+    view === "sold" ? Number(item.stock) <= 0 : Number(item.stock) > 0
+  ));
+}
+
+function renderStockFilters() {
+  const node = document.getElementById("stock-filters");
+  if (!node) return;
+  const state = listFilter.stock;
+  const available = stockPool("available");
+  const sold = stockPool("sold");
+  const pool = state.view === "sold" ? sold : available;
+  node.innerHTML = `
+    <button type="button" data-view="available" class="${state.view !== "sold" ? "is-active" : ""}">
+      Disponíveis <span>${available.length}</span>
+    </button>
+    <button type="button" data-view="sold" class="${state.view === "sold" ? "is-active" : ""}">
+      Vendidos <span>${sold.length}</span>
+    </button>
+    <button type="button" data-cat="all" class="${state.category === "all" ? "is-active" : ""}">
+      Todas <span>${pool.length}</span>
+    </button>
+    ${CATEGORIES.map((cat) => {
+      const count = pool.filter((item) => item.categorySlug === cat.slug).length;
+      if (!count) return "";
+      return `
+        <button type="button" data-cat="${cat.slug}" class="${state.category === cat.slug ? "is-active" : ""}">
+          ${cat.label} <span>${count}</span>
+        </button>`;
+    }).join("")}`;
+}
+
+function bindStockFilters() {
+  document.getElementById("stock-filters").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.view) listFilter.stock.view = button.dataset.view;
+    else if (button.dataset.cat) listFilter.stock.category = button.dataset.cat;
+    renderStock();
+  });
+}
+
+function stockResultLabel(count, view) {
+  if (!count) return "";
+  if (view === "sold") return count === 1 ? "1 peça vendida" : `${count} peças vendidas`;
+  return count === 1 ? "1 peça disponível" : `${count} peças disponíveis`;
+}
+
 function renderStock() {
-  const totalUnits = catalog.products.reduce((sum, item) => sum + (item.stock || 0), 0);
-  const low = catalog.products.filter((item) => item.stock <= 2).length;
-  const stockCost = catalog.products.reduce((sum, item) => sum + (Number(item.cost) || 0) * (item.stock || 0), 0);
-  const stockSale = catalog.products.reduce((sum, item) => sum + (Number(item.priceMin) || 0) * (item.stock || 0), 0);
+  const available = stockPool("available");
+  const totalUnits = available.reduce((sum, item) => sum + (item.stock || 0), 0);
+  const stockCost = available.reduce((sum, item) => sum + (Number(item.cost) || 0) * (item.stock || 0), 0);
+  const stockSale = available.reduce((sum, item) => sum + (Number(item.priceMin) || 0) * (item.stock || 0), 0);
   document.getElementById("stock-summary").innerHTML = `
-    <div class="stat-card"><span>Peças em estoque</span><strong>${totalUnits}</strong></div>
-    <div class="stat-card"><span>Produtos cadastrados</span><strong>${catalog.products.length}</strong></div>
-    <div class="stat-card"><span>Estoque baixo</span><strong>${low}</strong></div>
+    <div class="stat-card"><span>Disponíveis</span><strong>${available.length}</strong></div>
+    <div class="stat-card"><span>Unidades</span><strong>${totalUnits}</strong></div>
     <div class="stat-card"><span>Custo em estoque</span><strong>${money(stockCost)}</strong></div>
     <div class="stat-card"><span>Venda potencial</span><strong>${money(stockSale)}</strong></div>
   `;
 
+  const state = listFilter.stock;
   const query = stockSearch.value.trim().toLowerCase();
-  const rows = filterItems(query, listFilter.stock);
-  renderFilterChips("stock-filters", listFilter.stock);
-  document.getElementById("stock-result-meta").textContent = rows.length
-    ? `${rows.length} peça${rows.length === 1 ? "" : "s"} nesta visão`
-    : "";
+  const rows = stockPool(state.view)
+    .filter((item) => state.category === "all" || item.categorySlug === state.category)
+    .filter((item) => matchesQuery(item, query))
+    .sort((a, b) => Number(a.stock) - Number(b.stock) || a.name.localeCompare(b.name, "pt"));
+  renderStockFilters();
+  document.getElementById("stock-result-meta").textContent = stockResultLabel(rows.length, state.view);
 
   if (!rows.length) {
     document.getElementById("stock-list").innerHTML = "<p class='panel-hint'>Nenhuma peça neste filtro. Ajuste a busca ou a categoria.</p>";
@@ -754,10 +822,11 @@ function renderStock() {
             <div class="item-card-body">
               <h4>${text(item.name)}</h4>
               <p>
-                <span class="${item.stock <= 2 ? "stock-low" : ""}">${item.stock ?? 0} un.</span>
+                ${isSoldOut(item)
+                  ? `<span class="sold-tag">Vendido</span>`
+                  : `<span class="${item.stock <= 2 ? "stock-low" : ""}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}`}
                 · Venda ${money(item.priceMin)}
                 · Custo ${money(item.cost || 0)}
-                · ${item.showOnHome ? "Na home" : "Fora da home"}
               </p>
             </div>
             <button type="button" data-edit-stock="${text(item.id)}">Editar</button>
@@ -1336,6 +1405,7 @@ async function loadCatalog() {
   if (!Array.isArray(catalog.fiado)) catalog.fiado = [];
   if (!Array.isArray(catalog.prospects)) catalog.prospects = [];
   if (!catalog.promoPopup) catalog.promoPopup = {};
+  refreshSoldIndex();
   renderPromoProducts();
   renderProducts();
   renderPromoPopupSettings();
@@ -1545,7 +1615,7 @@ document.getElementById("cancel-product").addEventListener("click", () => produc
 productSearch.addEventListener("input", renderProducts);
 stockSearch.addEventListener("input", renderStock);
 bindFilterBar("product-filters", "products", renderProducts);
-bindFilterBar("stock-filters", "stock", renderStock);
+bindStockFilters();
 
 document.getElementById("sales-period-filters").addEventListener("click", (event) => {
   const button = event.target.closest("[data-period]");

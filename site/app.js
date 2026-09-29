@@ -162,11 +162,15 @@ function setupHero(banners) {
   }
 }
 
+function isSellable(product) {
+  return Number(product.stock) > 0 && product.showOnHome !== false;
+}
+
 function renderCategoryCovers(products) {
   document.querySelectorAll("[data-category-cover]").forEach((img) => {
     const item = products.find((product) => (
       product.categorySlug === img.dataset.categoryCover &&
-      product.showOnHome !== false &&
+      isSellable(product) &&
       product.image
     ));
     const card = img.closest(".category-card");
@@ -181,7 +185,7 @@ function renderCategoryCovers(products) {
 
   document.querySelectorAll("[data-category-link]").forEach((link) => {
     const visible = products.some((product) => (
-      product.categorySlug === link.dataset.categoryLink && product.showOnHome !== false
+      product.categorySlug === link.dataset.categoryLink && isSellable(product)
     ));
     link.hidden = !visible;
   });
@@ -190,7 +194,7 @@ function renderCategoryCovers(products) {
 function renderShelves(products) {
   document.querySelectorAll(".product-grid[data-category]").forEach((grid) => {
     const category = grid.dataset.category;
-    const items = products.filter((item) => item.categorySlug === category && item.showOnHome !== false);
+    const items = products.filter((item) => item.categorySlug === category && isSellable(item));
     const section = grid.closest(".shelf");
     if (!items.length) {
       if (section) section.hidden = true;
@@ -207,7 +211,7 @@ function renderPromoShelf(products) {
   const grid = document.getElementById("promo-grid");
   if (!section || !grid) return;
 
-  const items = products.filter((item) => isPromoProduct(item) && item.showOnHome !== false);
+  const items = products.filter((item) => isPromoProduct(item) && isSellable(item));
   if (!items.length) {
     section.hidden = true;
     return;

@@ -14,8 +14,8 @@
   <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260928h">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css?v=20260928m">
   <link rel="prefetch" href="/">
   <link rel="prefetch" href="/styles.css">
   <link rel="prefetch" href="/catalog.js">
@@ -65,7 +65,6 @@
         </button>
         <button type="button" data-tab="banners">Banner</button>
         <button type="button" data-tab="prospects">Prospects</button>
-        <span class="admin-tabs-spacer" aria-hidden="true"></span>
       </nav>
     </header>
 
@@ -83,9 +82,10 @@
           <p class="panel-hint promo-hint">Marque o selo <strong>Sale</strong> ou preencha um preço riscado maior que o preço atual.</p>
           <div id="promo-product-list" class="item-list promo-product-list"></div>
         </section>
+        <p class="panel-hint">A lista abre com as peças disponíveis. As vendidas entram pelo filtro Vendidos.</p>
         <div class="ops-toolbar">
           <input id="product-search" type="search" placeholder="Buscar peça, coleção ou categoria" autocomplete="off">
-          <div class="filter-chips" id="product-filters" role="group" aria-label="Filtrar produtos por categoria"></div>
+          <div class="filter-chips" id="product-filters" role="group" aria-label="Filtrar produtos"></div>
         </div>
         <p id="product-result-meta" class="result-meta"></p>
         <div id="product-list"></div>
@@ -96,7 +96,7 @@
           <h2>Estoque</h2>
           <button id="new-product-stock-btn" type="button">Novo produto</button>
         </div>
-        <p class="panel-hint">Filtre a categoria, busque a peça e reponha com a quantidade na linha.</p>
+        <p class="panel-hint">Aqui ficam as peças que ainda podem ser vendidas. As vendidas entram pelo filtro Vendidos.</p>
         <div class="ops-toolbar">
           <input id="stock-search" type="search" placeholder="Buscar peça para repor estoque" autocomplete="off">
           <div class="filter-chips" id="stock-filters" role="group" aria-label="Filtrar estoque por categoria"></div>
@@ -415,6 +415,6 @@
   </dialog>
 
   <script src="catalog.js?v=20260928"></script>
-  <script src="admin.js?v=20260928g"></script>
+  <script src="admin.js?v=20260928m"></script>
 </body>
 </html>

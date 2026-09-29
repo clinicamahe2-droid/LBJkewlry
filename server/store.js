@@ -344,7 +344,7 @@ async function publicCatalog() {
   const popup = normalizePromoPopup(catalog.promoPopup);
   return {
     products: catalog.products
-      .filter((product) => product.active !== false)
+      .filter((product) => product.active !== false && Number(product.stock) > 0)
       .map((product) => {
         const { cost, sku, active, ...publicProduct } = product;
         return publicProduct;

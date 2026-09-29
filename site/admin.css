@@ -12,9 +12,11 @@ html {
 
 body {
   font-family: Inter, "Segoe UI", sans-serif;
+  font-size: 16px;
   background: #f4f2ed;
   color: #161616;
   line-height: 1.5;
+  font-variant-numeric: tabular-nums;
   min-height: 100dvh;
   padding:
     0
@@ -53,7 +55,7 @@ dialog {
 
 .login-brand,
 .admin-header .login-brand {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   font-size: 0.8rem;
@@ -62,11 +64,13 @@ dialog {
 .login-card h1,
 dialog h2,
 .panel-head h2 {
-  font-family: Oswald, sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin: 0.5rem 0 0.75rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 500;
+  font-size: 1.85rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 1.15;
+  margin: 0.35rem 0 0.85rem;
 }
 
 .login-copy,
@@ -93,10 +97,12 @@ dialog h2,
 
 label {
   display: block;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin-bottom: 0.85rem;
+  color: #4a453f;
+  margin-bottom: 0.9rem;
 }
 
 input,
@@ -111,11 +117,16 @@ select,
 textarea {
   display: block;
   width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.7rem 0.75rem;
+  margin-top: 0.4rem;
+  padding: 0.78rem 0.85rem;
   border: 1px solid #d8d4cc;
   background: #fff;
   color: #161616;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 button,
@@ -123,10 +134,11 @@ button,
   border: 1px solid #161616;
   background: #161616;
   color: #fff;
-  padding: 0.7rem 1rem;
-  letter-spacing: 0.08em;
+  padding: 0.72rem 1rem;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
   cursor: pointer;
   text-decoration: none;
 }
@@ -161,6 +173,7 @@ button.primary {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  order: 1;
   padding:
     calc(0.85rem + env(safe-area-inset-top, 0px))
     1rem
@@ -204,17 +217,19 @@ button.primary {
   display: flex;
   gap: 0.5rem;
   width: 100%;
+  order: 2;
   overflow-x: auto;
   overflow-y: hidden;
   flex-wrap: nowrap;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   scroll-padding-inline: 1rem;
-  padding-bottom: 0.2rem;
+  padding: 0 1rem 0.65rem;
+  background: #fff;
 }
 
-.admin-tabs-spacer {
-  flex: 0 0 1.5rem;
+.admin-main {
+  order: 3;
 }
 
 .admin-tabs::-webkit-scrollbar {
@@ -330,11 +345,12 @@ button.primary {
 }
 
 .category-block-head h3 {
-  font-family: Oswald, sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 0.9rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  font-size: 1.45rem;
+  line-height: 1.1;
 }
 
 .category-block-head span {
@@ -461,10 +477,12 @@ dialog::backdrop {
 
 .stat-card strong {
   display: block;
-  font-family: Oswald, sans-serif;
-  font-size: 1.25rem;
-  letter-spacing: 0.04em;
-  margin-top: 0.25rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  margin-top: 0.2rem;
 }
 
 .stat-card span {
@@ -559,6 +577,10 @@ dialog::backdrop {
   height: 52px;
 }
 
+.item-card-body {
+  min-width: 0;
+}
+
 .item-card-body h4 {
   font-size: 0.875rem;
   font-weight: 500;
@@ -569,6 +591,7 @@ dialog::backdrop {
 .item-card-body p {
   color: #5c5c5c;
   font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .item-card-actions {
@@ -666,7 +689,7 @@ dialog::backdrop {
 
 .form-section {
   margin: 1.25rem 0 0.75rem;
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-size: 0.8rem;
@@ -693,7 +716,7 @@ dialog::backdrop {
 }
 
 .chart-card h3 {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -794,11 +817,12 @@ dialog::backdrop {
 }
 
 .panel-head--compact h3 {
-  font-family: Oswald, sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.95rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 1.45rem;
+  line-height: 1.1;
 }
 
 #tab-fiado {
@@ -824,18 +848,19 @@ dialog::backdrop {
 
 .fiado-kpi span {
   display: block;
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   color: #5c5c5c;
 }
 
 .fiado-kpi strong {
   display: block;
-  margin-top: 0.15rem;
-  font-family: Oswald, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 500;
+  margin-top: 0.1rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
+  line-height: 1;
 }
 
 .fiado-kpi.is-receivable { background: #eef4fb; border-color: #9ec5eb; }
@@ -872,8 +897,8 @@ dialog::backdrop {
   background: #fff;
   color: #3a3a3a;
   border: 1px solid #d8d4cc;
-  letter-spacing: 0.03em;
-  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
 }
 
 .fiado-dock button span:last-child {
@@ -894,14 +919,14 @@ dialog::backdrop {
   position: absolute;
   top: 0.28rem;
   right: 0.22rem;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.22rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
   border-radius: 999px;
   background: #1a4d8c;
   color: #fff;
-  font-size: 0.62rem;
-  line-height: 1.05rem;
+  font-size: 0.68rem;
+  line-height: 1.15rem;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -1230,7 +1255,7 @@ dialog::backdrop {
 }
 
 .fiado-alert header {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-size: 0.85rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1382,8 +1407,8 @@ dialog::backdrop {
 
 .fiado-card-label {
   display: block;
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #5c5c5c;
   margin-bottom: 0.2rem;
@@ -1429,7 +1454,7 @@ dialog::backdrop {
 }
 
 .fiado-financials dd {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-size: 1rem;
   margin-top: 0.15rem;
 }
@@ -1509,8 +1534,8 @@ dialog::backdrop {
 }
 
 .fiado-payment-item-actions button {
-  padding: 0.35rem 0.55rem;
-  font-size: 0.625rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.75rem;
   background: #fff;
   color: #161616;
   border-color: #d8d4cc;
@@ -1523,8 +1548,8 @@ dialog::backdrop {
 
 .fiado-badge {
   display: inline-block;
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0.25rem 0.5rem;
   border: 1px solid transparent;
@@ -1551,8 +1576,8 @@ dialog::backdrop {
 
 .sale-badge {
   display: inline-block;
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0.15rem 0.4rem;
   border: 1px solid #161616;
@@ -1597,8 +1622,8 @@ dialog::backdrop {
 
 .payment-summary-label {
   display: block;
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #5c5c5c;
   margin-top: 0.5rem;
@@ -1742,7 +1767,7 @@ dialog::backdrop {
   .admin-actions a,
   .admin-actions button {
     padding: 0.52rem 0.4rem;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     letter-spacing: 0.04em;
     text-align: center;
     justify-content: center;
@@ -1754,28 +1779,48 @@ dialog::backdrop {
   }
 
   .admin-tabs {
-    padding-inline: 0.75rem;
-    padding-right: max(1.5rem, calc(0.75rem + env(safe-area-inset-right, 0px)));
-    scroll-padding-inline: 1.25rem;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    order: 4;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.35rem;
+    width: 100%;
+    margin: 0;
+    overflow: visible;
+    padding: 0.45rem 0.55rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+    background: #fff;
+    border-top: 1px solid #d8d4cc;
+    box-shadow: 0 -8px 24px rgba(22, 22, 22, 0.06);
   }
 
-  .admin-tabs button {
-    flex: 0 0 auto;
+  .admin-tabs button,
+  .admin-tabs .fiado-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 2.75rem;
     white-space: nowrap;
-    font-size: 0.6875rem;
-    letter-spacing: 0.03em;
-    padding: 0.48rem 0.62rem;
-    line-height: 1.2;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    padding: 0.55rem 0.3rem;
+    line-height: 1.1;
+    text-align: center;
   }
 
-  .admin-tabs-spacer {
-    flex: 0 0 2.5rem;
+  .admin-tabs .fiado-tab svg {
+    display: none;
   }
 
   .admin-main {
-    width: min(100% - 0.75rem, 1100px);
-    margin: 0.75rem auto 1rem;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0.85rem 0.85rem calc(7.4rem + env(safe-area-inset-bottom, 0px));
   }
 
   .panel-head {
@@ -1785,7 +1830,16 @@ dialog::backdrop {
   }
 
   .panel-head h2 {
-    font-size: 1.1rem;
+    font-size: 1.7rem;
+  }
+
+  .promo-block {
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .promo-block:has(.promo-empty) .promo-hint {
+    display: none;
   }
 
   .ops-toolbar input[type="search"] {
@@ -1796,11 +1850,19 @@ dialog::backdrop {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+    width: 100%;
+    min-width: 0;
   }
 
   .filter-chips button {
-    font-size: 0.6875rem;
-    padding: 0.4rem 0.6rem;
+    flex: 1 1 calc(50% - 0.4rem);
+    max-width: calc(50% - 0.2rem);
+    min-width: 0;
+    min-height: 2.75rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    padding: 0.5rem 0.45rem;
+    text-align: center;
   }
 
   .banner-card {
@@ -1848,7 +1910,7 @@ dialog::backdrop {
   }
 
   .stat-card strong {
-    font-size: 1rem;
+    font-size: 1.4rem;
   }
 
   .fiado-alert-item {
@@ -1880,8 +1942,9 @@ dialog::backdrop {
   }
 
   dialog {
-    width: calc(100vw - 1rem);
-    max-width: calc(100vw - 1rem);
+    width: min(100% - 1rem, 520px);
+    max-width: calc(100% - 1rem);
+    max-height: calc(100dvh - 1rem);
     margin: auto;
   }
 
@@ -1918,7 +1981,7 @@ dialog::backdrop {
 }
 
 .promo-block-head h3 {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1952,13 +2015,29 @@ dialog::backdrop {
 
 .promo-tag {
   display: inline-block;
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #8a6d2e;
   background: rgba(176, 141, 58, 0.15);
   border: 1px solid rgba(176, 141, 58, 0.35);
   padding: 0.1rem 0.35rem;
+}
+
+.sold-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #5c5348;
+  background: #efeae3;
+  border: 1px solid #d9d0c4;
+  padding: 0.1rem 0.4rem;
+}
+
+.item-card--sold {
+  background: #f7f4ef;
 }
 
 .promo-empty {
@@ -1982,7 +2061,7 @@ dialog::backdrop {
 }
 
 .promo-popup-settings-head h3 {
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2061,7 +2140,7 @@ dialog::backdrop {
   min-width: 3.25rem;
   padding: 0.55rem 0.85rem;
   text-align: center;
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-size: 1.35rem;
   letter-spacing: 0.04em;
   color: #8a6d2e;
@@ -2087,7 +2166,7 @@ dialog::backdrop {
 
 .prospects-empty strong {
   display: block;
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 400;
@@ -2121,7 +2200,7 @@ dialog::backdrop {
   height: 2.5rem;
   display: grid;
   place-items: center;
-  font-family: Oswald, sans-serif;
+  font-family: "Cormorant Garamond", Georgia, serif;
   font-size: 0.8rem;
   letter-spacing: 0.06em;
   color: #8a6d2e;

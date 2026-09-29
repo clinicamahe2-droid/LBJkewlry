@@ -132,7 +132,7 @@
         return;
       }
       const related = catalog.products
-        .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id && item.showOnHome !== false)
+        .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id && Number(item.stock) > 0 && item.showOnHome !== false)
         .slice(0, 4);
       render(product, related);
     })
