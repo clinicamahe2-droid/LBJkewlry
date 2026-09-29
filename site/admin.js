@@ -1619,6 +1619,7 @@ loginForm.addEventListener("submit", async (event) => {
     showPanel();
     await loadCatalog();
   } catch (error) {
+    showLogin();
     showError(loginError, error.message);
   } finally {
     submitBtn.disabled = false;
@@ -2205,7 +2206,31 @@ function isIosDevice() {
 
 function setupAdminPwa() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw-admin.js", { scope: "/" }).catch(() => {});
+    if (isIosDevice()) {
+      // No iPhone, o service worker do app instalado impede o cookie de sessão.
+      navigator.serviceWorker.getRegistrations()
+        .then(async (registrations) => {
+          if (!registrations.length) return;
+          const controlled = Boolean(navigator.serviceWorker.controller);
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          if (controlled) window.location.reload();
+        })
+        .catch(() => {});
+    } else {
+      navigator.serviceWorker.getRegistrations()
+        .then(async (registrations) => {
+          const rootWorkers = registrations.filter((registration) => {
+            try {
+              return new URL(registration.scope).pathname === "/";
+            } catch {
+              return false;
+            }
+          });
+          await Promise.all(rootWorkers.map((registration) => registration.unregister()));
+          await navigator.serviceWorker.register("/sw-admin.js", { scope: "/admin" });
+        })
+        .catch(() => {});
+    }
   }
 
   const installBtn = document.getElementById("install-pwa-btn");

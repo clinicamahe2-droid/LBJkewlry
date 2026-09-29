@@ -156,6 +156,27 @@ function prospectLimited(req, res, next) {
   next();
 }
 
+function normalizeLoginUser(value) {
+  return String(value || "").trim().normalize("NFC").toLowerCase();
+}
+
+function passwordMatches(password, hash) {
+  const raw = String(password || "");
+  const candidates = [raw];
+  const normalized = raw
+    .normalize("NFC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/[\u201C\u201D]/g, "\"")
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\r?\n/g, "");
+  if (normalized !== raw) candidates.push(normalized);
+  const trimmed = normalized.trim();
+  if (trimmed !== normalized) candidates.push(trimmed);
+  return candidates.some((candidate) => bcrypt.compareSync(candidate, hash));
+}
+
 function requireAdmin(req, res, next) {
   if (!req.session?.admin) {
     res.status(401).json({ error: "Sessão expirada. Entre novamente." });
@@ -218,10 +239,10 @@ async function createApp() {
   });
 
   app.post("/api/admin/login", loginLimited, (req, res) => {
-    const user = String(req.body?.user || "").trim();
+    const user = normalizeLoginUser(req.body?.user);
     const password = String(req.body?.password || "");
-    const validUser = user === adminAccount.user;
-    const validPass = bcrypt.compareSync(password, adminAccount.passwordHash);
+    const validUser = user === normalizeLoginUser(adminAccount.user);
+    const validPass = passwordMatches(password, adminAccount.passwordHash);
     if (!validUser || !validPass) {
       req.loginRecord.count += 1;
       res.status(401).json({ error: "Usuário ou senha inválidos." });

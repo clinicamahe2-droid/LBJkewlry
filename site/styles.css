@@ -427,6 +427,10 @@ button {
     padding-inline: 1rem;
   }
 
+  .hero-track {
+    height: clamp(220px, 58vw, 400px);
+  }
+
   .hero-slide {
     max-height: none;
   }
@@ -556,14 +560,23 @@ button {
 }
 
 .hero-track {
-  display: flex;
-  transition: transform 0.55s ease;
+  position: relative;
+  height: min(52vw, 520px);
 }
 
 .hero-slide {
+  position: absolute;
+  inset: 0;
   min-width: 100%;
-  position: relative;
-  max-height: 520px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.55s ease;
+}
+
+.hero-slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
 }
 
 .hero-slide::after {
@@ -1758,6 +1771,10 @@ button {
   .nav {
     gap: 0.5rem 0.75rem;
     font-size: 0.625rem;
+  }
+
+  .hero-track {
+    height: clamp(200px, 62vw, 320px);
   }
 
   .hero-slide img,

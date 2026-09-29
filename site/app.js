@@ -1,3 +1,22 @@
+function releaseStorefrontWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.getRegistrations()
+    .then(async (registrations) => {
+      const rootWorkers = registrations.filter((registration) => {
+        try {
+          return new URL(registration.scope).pathname === "/";
+        } catch {
+          return false;
+        }
+      });
+      if (!rootWorkers.length) return;
+      await Promise.all(rootWorkers.map((registration) => registration.unregister()));
+      if (navigator.serviceWorker.controller) window.location.reload();
+    })
+    .catch(() => {});
+}
+
+releaseStorefrontWorker();
 const heroSection = document.querySelector(".hero");
 const heroTrack = document.querySelector(".hero-track");
 const heroDots = document.querySelector(".hero-dots");
@@ -38,6 +57,11 @@ function revealHero() {
 
 function playHeroVideo(video) {
   if (!video) return;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
   const attempt = video.play();
   if (attempt?.catch) {
     attempt.catch(() => {});
@@ -83,7 +107,9 @@ function armHeroPlaybackOnInteraction() {
 function goToSlide(index, total) {
   if (!heroTrack) return;
   currentSlide = index;
-  heroTrack.style.transform = `translateX(-${index * 100}%)`;
+  [...heroTrack.children].forEach((slide, i) => {
+    slide.classList.toggle("is-active", i === index);
+  });
   document.querySelectorAll(".hero-dot").forEach((dot, i) => {
     dot.classList.toggle("active", i === index);
   });
@@ -94,7 +120,6 @@ function goToSlide(index, total) {
       }
     } else {
       video.pause();
-      video.currentTime = 0;
     }
   });
   clearInterval(slideTimer);
@@ -120,7 +145,7 @@ function setupHero(banners) {
     const label = escapeHtml(banner.alt || banner.title || "Banner");
     const poster = banner.poster ? ` poster="${escapeHtml(banner.poster)}"` : "";
     const media = banner.type === "video" && banner.video
-      ? `<video class="hero-video" src="${escapeHtml(banner.video)}"${poster} muted loop autoplay playsinline webkit-playsinline preload="${index === 0 ? "auto" : "metadata"}" aria-label="${label}"></video>`
+      ? `<video class="hero-video" muted loop autoplay playsinline webkit-playsinline preload="${index === 0 ? "auto" : "metadata"}" aria-label="${label}"${poster}><source src="${escapeHtml(banner.video)}" type="video/mp4"></video>`
       : `<img src="${escapeHtml(banner.image)}" alt="${label}">`;
     return `
     <div class="hero-slide">
