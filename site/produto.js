@@ -29,6 +29,7 @@
     const variants = (product.thickness || []).filter((value) => value && value !== "Único");
     const variantLabel = product.categorySlug === "aneis" ? "Numeração" : "Espessura aprox";
     const images = product.images?.length ? product.images : [product.image];
+    const galleryLabel = (index) => ["Peça", "Mostruário", "Em uso"][index] || `Foto ${index + 1}`;
     const detailLines = (product.details || []).filter((item) => item && !/importado do vendafácil|venda importada/i.test(item));
 
     root.innerHTML = `
@@ -48,8 +49,9 @@
             </div>
             <div class="pdp-thumbs">
               ${images.map((src, index) => `
-                <button type="button" class="pdp-thumb${index === 0 ? " is-active" : ""}" data-image="${escapeHtml(src)}" aria-label="Imagem ${index + 1}">
+                <button type="button" class="pdp-thumb${index === 0 ? " is-active" : ""}" data-image="${escapeHtml(src)}" aria-label="${escapeHtml(galleryLabel(index))}">
                   <img src="${escapeHtml(src)}" alt="">
+                  <span>${escapeHtml(galleryLabel(index))}</span>
                 </button>
               `).join("")}
             </div>
