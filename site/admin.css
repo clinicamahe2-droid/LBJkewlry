@@ -548,6 +548,15 @@ dialog::backdrop {
   margin: 0;
 }
 
+.sales-section-title {
+  margin: 0.25rem 0 0.65rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .sale-form {
   display: grid;
   gap: 0.75rem;
@@ -555,6 +564,97 @@ dialog::backdrop {
   background: #fff;
   border: 1px solid #d8d4cc;
   padding: 1rem;
+}
+
+#tab-sales .ops-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+}
+
+@media (min-width: 900px) {
+  #tab-sales .stats-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  #tab-sales .stat-card {
+    padding: 0.85rem 0.75rem;
+  }
+
+  #tab-sales .stat-card strong {
+    font-size: 1.28rem;
+  }
+}
+
+.month-chart {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.35rem;
+  align-items: end;
+  min-height: 148px;
+}
+
+.month-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.month-track {
+  width: 100%;
+  max-width: 22px;
+  height: 112px;
+  background: transparent;
+  border-bottom: 1px solid #d8d4cc;
+  display: flex;
+  align-items: flex-end;
+}
+
+.month-fill {
+  width: 100%;
+  background: #161616;
+}
+
+.month-label {
+  font-size: 0.62rem;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: #5c5c5c;
+  text-align: center;
+}
+
+.sales-table {
+  min-width: 720px;
+}
+
+.sales-table th:last-child,
+.sales-table td.sales-amount {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sales-table td strong {
+  display: block;
+  font-weight: 500;
+}
+
+.sales-table td small {
+  display: block;
+  margin-top: 0.15rem;
+  color: #5c5c5c;
+  font-size: 0.72rem;
+}
+
+.sales-table .sale-badge {
+  margin-bottom: 0.25rem;
+}
+
+.sales-table tbody tr:hover {
+  background: #faf8f4;
 }
 
 .item-list {
@@ -659,8 +759,19 @@ dialog::backdrop {
 
 @media (min-width: 800px) {
   .sale-form {
-    grid-template-columns: 0.9fr 2fr 0.7fr 0.9fr auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: end;
+  }
+
+  .sale-form label {
+    margin-bottom: 0;
+  }
+
+  .sale-form button.primary {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: auto;
+    min-width: 12rem;
   }
 
   .item-card {
@@ -703,9 +814,21 @@ dialog::backdrop {
   margin-bottom: 1.5rem;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 800px) {
   .charts-grid {
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: 1.35fr 0.9fr;
+  }
+}
+
+@media (min-width: 1100px) {
+  #tab-sales .sale-form {
+    grid-template-columns: minmax(8rem, 0.7fr) minmax(12rem, 1.55fr) 6.5rem minmax(8.4rem, 0.85fr) minmax(7.5rem, 0.75fr) auto;
+  }
+
+  #tab-sales .sale-form button.primary {
+    grid-column: auto;
+    min-width: 0;
+    white-space: nowrap;
   }
 }
 
@@ -1900,9 +2023,64 @@ dialog::backdrop {
     justify-self: start;
   }
 
-  .stats-grid {
+  .stats-grid,
+  #tab-sales .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
+  }
+
+  .month-chart {
+    display: flex;
+    overflow-x: auto;
+    min-height: 0;
+    padding-bottom: 0.25rem;
+  }
+
+  .month-col {
+    flex: 0 0 2.15rem;
+  }
+
+  .sales-table {
+    min-width: 0;
+  }
+
+  .sales-table thead {
+    display: none;
+  }
+
+  .sales-table,
+  .sales-table tbody,
+  .sales-table tr,
+  .sales-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .sales-table tr {
+    padding: 0.85rem 0.9rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .sales-table td {
+    border: 0;
+    padding: 0.12rem 0;
+  }
+
+  .sales-table td.sales-amount {
+    text-align: left;
+    margin-top: 0.35rem;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.35rem;
+  }
+
+  .sales-table td[data-label="Cliente"]::before,
+  .sales-table td[data-label="Qtd"]::before,
+  .sales-table td[data-label="Pagamento"]::before {
+    content: attr(data-label) " · ";
+    color: #5c5c5c;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .stat-card {

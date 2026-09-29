@@ -296,6 +296,18 @@ function saleLabel(sale) {
   return "À vista";
 }
 
+function saleWhen(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function text(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -421,13 +433,15 @@ function renderMonthChart(sales) {
     }
   });
   const max = Math.max(...months.map((item) => item.total), 1);
-  document.getElementById("chart-months").innerHTML = months.map((item) => `
-    <div class="cat-row">
-      <span>${item.label}</span>
-      <div class="cat-track"><div class="cat-fill" style="width:${(item.total / max) * 100}%"></div></div>
-      <strong>${item.total ? money(item.total) : "—"}</strong>
-    </div>
-  `).join("");
+  document.getElementById("chart-months").innerHTML = `<div class="month-chart">${months.map((item) => {
+    const [month, year] = item.label.split("/");
+    const height = Math.max(item.total ? 8 : 0, Math.round((item.total / max) * 100));
+    return `
+      <div class="month-col" title="${item.total ? money(item.total) : "Sem vendas"}">
+        <div class="month-track"><div class="month-fill" style="height:${height}%"></div></div>
+        <span class="month-label">${month}<br>${year}</span>
+      </div>`;
+  }).join("")}</div>`;
 }
 
 function renderCategoryChart(sales) {
@@ -921,25 +935,46 @@ function renderSales() {
 
   fillSaleProducts(lastSaleProductId);
   document.getElementById("sales-list").innerHTML = rows.length ? `
-    <div class="item-list">
-      ${rows.map((item) => {
-        const badge = saleLabel(item);
-        const clientName = resolveSaleClient(item);
-        const amount = saleRevenueAmount(item);
-        return `
-        <article class="item-card sale-card sale-card--${text(item.type || "cash")}">
-          <div class="item-card-body">
-            <span class="sale-badge">${badge}</span>
-            <h4>${text(item.productName || "Recebimento")}</h4>
-            <p>${new Date(item.createdAt).toLocaleString("pt-BR")}${item.quantity ? ` · ${item.quantity} un.` : ""}${clientName ? ` · Cliente: <strong>${text(clientName)}</strong>` : ""}${item.paymentMethod ? ` · ${text(item.paymentMethod)}` : ""}</p>
-            ${item.type === "fiado" && Number(item.total || 0) > amount ? `<p class="sale-meta">Total da venda: ${money(item.total)} · Entrada: ${money(amount)}</p>` : ""}
-            ${item.unitCost && item.type !== "fiado_payment" ? `<p class="sale-meta">Custo ${money(item.unitCost * (item.quantity || 1))} · Margem ${money(amount - item.unitCost * (item.quantity || 1))}</p>` : ""}
-            ${item.notes ? `<p class="sale-meta">${text(item.notes)}</p>` : ""}
-          </div>
-          <strong class="sale-total">${money(amount)}</strong>
-        </article>`;
-      }).join("")}
-    </div>` : "<p class='panel-hint'>Nenhuma venda neste filtro.</p>";
+    <table class="sales-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Peça</th>
+          <th>Cliente</th>
+          <th>Qtd</th>
+          <th>Pagamento</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((item) => {
+          const clientName = resolveSaleClient(item);
+          const amount = saleRevenueAmount(item);
+          const qty = item.quantity || 0;
+          const costLine = item.unitCost && item.type !== "fiado_payment"
+            ? `Custo ${money(item.unitCost * (qty || 1))} · Margem ${money(amount - item.unitCost * (qty || 1))}`
+            : "";
+          const fiadoLine = item.type === "fiado" && Number(item.total || 0) > amount
+            ? `Total ${money(item.total)} · Entrada ${money(amount)}`
+            : "";
+          return `
+          <tr>
+            <td data-label="Data">${saleWhen(item.createdAt)}</td>
+            <td data-label="Peça">
+              <span class="sale-badge">${saleLabel(item)}</span>
+              <strong>${text(item.productName || "Recebimento")}</strong>
+              ${fiadoLine ? `<small>${fiadoLine}</small>` : ""}
+              ${costLine ? `<small>${costLine}</small>` : ""}
+              ${item.notes ? `<small>${text(item.notes)}</small>` : ""}
+            </td>
+            <td data-label="Cliente">${clientName ? text(clientName) : "—"}</td>
+            <td data-label="Qtd">${qty || "—"}</td>
+            <td data-label="Pagamento">${item.paymentMethod ? text(item.paymentMethod) : "—"}</td>
+            <td data-label="Valor" class="sales-amount">${money(amount)}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>` : "<p class='panel-hint'>Nenhuma venda neste filtro.</p>";
 }
 
 function fillFiadoProducts(selectedId) {
