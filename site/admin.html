@@ -8,6 +8,17 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0F0D0A" media="(prefers-color-scheme: dark)">
+  <script>
+    // Tema escolhido no painel (fica salvo neste aparelho); aplicado antes de desenhar.
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("lb-admin-theme"); } catch (e) {}
+      if (t === "light" || t === "dark") {
+        document.documentElement.setAttribute("data-theme", t);
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = t === "dark" ? "#0F0D0A" : "#F7F5F0"; });
+      }
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LB Painel">
@@ -16,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20261006r">
+  <link rel="stylesheet" href="admin.css?v=20261006t">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -49,6 +60,7 @@
     <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m20 16-5-5-8 8"/></symbol>
   </svg>
 
@@ -178,6 +190,8 @@
             <div class="sec-head"><h3>Conta</h3></div>
             <div class="group">
               <a class="rowi rowi--plain" href="/" target="_blank" rel="noopener"><span class="avatar"><svg class="i i-sm"><use href="#i-store"/></svg></span><span class="mid"><span class="name">Ver loja</span><span class="meta">Abre a loja em outra aba</span></span><svg class="i chev"><use href="#i-chev"/></svg></a>
+              <div class="rowi rowi--plain theme-row"><span class="avatar"><svg class="i i-sm"><use href="#i-sun"/></svg></span><span class="mid"><span class="name">Tema do painel</span><span class="meta">Vale só neste aparelho</span></span></div>
+              <div class="theme-pick"><div class="seg" role="group" aria-label="Tema do painel" id="theme-seg"><button type="button" data-theme-pick="auto">Automático</button><button type="button" data-theme-pick="light">Claro</button><button type="button" data-theme-pick="dark">Escuro</button></div></div>
               <button class="rowi rowi--plain" type="button" id="install-row" hidden><span class="avatar"><svg class="i i-sm"><use href="#i-phone"/></svg></span><span class="mid"><span class="name">Instalar como app</span><span class="meta" id="install-meta">Ícone na tela inicial do celular</span></span><svg class="i chev"><use href="#i-chev"/></svg></button>
             </div>
             <button class="danger-link" type="button" id="logout-btn"><svg class="i i-sm"><use href="#i-out"/></svg>Sair do painel</button>
@@ -209,6 +223,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </div>
 
-  <script src="admin.js?v=20261006r"></script>
+  <script src="admin.js?v=20261006t"></script>
 </body>
 </html>
