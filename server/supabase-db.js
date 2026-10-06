@@ -304,22 +304,73 @@ function applyOpsExtras(catalog, extras) {
   return catalog;
 }
 
-async function upsertRows(table, rows, mapRow) {
-  const payload = rows.map(mapRow);
-  if (!payload.length) return payload.map((row) => row.id);
-  const { error } = await getSupabase().from(table).upsert(payload, { onConflict: "id" });
-  throwIfError(error);
-  return payload.map((row) => row.id);
+// O catálogo é lido inteiro, alterado em memória e salvo. Para que dois aparelhos
+// gravando ao mesmo tempo não apaguem o trabalho um do outro, a gravação compara
+// com o que foi lido: só envia linhas alteradas e só apaga linhas que este
+// pedido viu e removeu. Linhas criadas por outro pedido nunca são tocadas.
+const snapshots = new WeakMap();
+
+async function loadColumns() {
+  const [productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay] = await Promise.all([
+    hasColumn("products", "cost"),
+    hasColumn("products", "sku"),
+    hasColumn("products", "active"),
+    hasColumn("clients", "address"),
+    hasColumn("sales", "unit_cost"),
+    hasColumn("sales", "payment_method"),
+    hasColumn("sales", "notes"),
+    hasColumn("fiado", "unit_cost"),
+    hasColumn("fiado", "payment_method")
+  ]);
+  return { productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay };
 }
 
-async function pruneRows(table, ids) {
-  const { data: existing, error: listError } = await getSupabase().from(table).select("id");
-  throwIfError(listError);
-  const keep = new Set(ids);
-  const toDelete = (existing || []).map((row) => row.id).filter((id) => !keep.has(id));
-  if (!toDelete.length) return;
-  const { error: deleteError } = await getSupabase().from(table).delete().in("id", toDelete);
-  throwIfError(deleteError);
+function tableMappers(columns) {
+  return [
+    ["clients", "clients", (client) => clientToRowWithColumns(client, { address: columns.clientAddress })],
+    ["products", "products", (product) => productToRow(product, {
+      cost: columns.productCost,
+      sku: columns.productSku,
+      active: columns.productActive
+    })],
+    ["banners", "banners", bannerToRow],
+    ["fiado", "fiado", (entry) => fiadoToRow(entry, {
+      unitCost: columns.fiadoCost,
+      paymentMethod: columns.fiadoPay
+    })],
+    ["sales", "sales", (sale) => saleToRow(sale, {
+      unitCost: columns.saleCost,
+      paymentMethod: columns.salePay,
+      notes: columns.saleNotes
+    })],
+    ["prospects", "prospects", prospectToRow]
+  ];
+}
+
+function rowsById(items, mapRow) {
+  return new Map((items || []).map((item, index) => {
+    const row = mapRow(item, index);
+    return [row.id, { row, json: JSON.stringify(row) }];
+  }));
+}
+
+function takeSnapshot(catalog, columns) {
+  const tables = {};
+  for (const [table, key, mapRow] of tableMappers(columns)) {
+    tables[table] = new Map([...rowsById(catalog[key], mapRow)].map(([id, entry]) => [id, entry.json]));
+  }
+  return {
+    tables,
+    extras: collectOpsExtras(catalog),
+    promoPopup: JSON.stringify(catalog.promoPopup ?? null)
+  };
+}
+
+// Passa o registro do que foi lido para uma cópia do catálogo (ex.: após migração).
+function linkSnapshot(from, to) {
+  const snapshot = snapshots.get(from);
+  if (snapshot && to && to !== from) snapshots.set(to, snapshot);
+  return to;
 }
 
 async function loadCatalogFromSupabase() {
@@ -343,7 +394,7 @@ async function loadCatalogFromSupabase() {
   throwIfError(settingsRes.error);
 
   const settings = Object.fromEntries((settingsRes.data || []).map((row) => [row.key, row.value]));
-  return applyOpsExtras({
+  const catalog = applyOpsExtras({
     products: (productsRes.data || []).map(productFromRow),
     banners: (bannersRes.data || []).map(bannerFromRow),
     clients: (clientsRes.data || []).map(clientFromRow),
@@ -352,56 +403,83 @@ async function loadCatalogFromSupabase() {
     prospects: (prospectsRes.data || []).map(prospectFromRow),
     promoPopup: settings.promo_popup || null
   }, settings.ops_extras);
+  snapshots.set(catalog, takeSnapshot(catalog, await loadColumns()));
+  return catalog;
+}
+
+// Aplica em cima do ops_extras atual do banco só o que este pedido mudou,
+// para não sobrescrever custos/formas de pagamento gravados por outro aparelho.
+async function saveOpsExtras(catalog, before) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("settings").select("value").eq("key", "ops_extras").maybeSingle();
+  throwIfError(error);
+  const current = data?.value && typeof data.value === "object" ? data.value : {};
+  const next = collectOpsExtras(catalog);
+  let changed = false;
+  for (const section of Object.keys(next)) {
+    const target = { ...(current[section] || {}) };
+    const prev = before?.[section] || {};
+    for (const [id, value] of Object.entries(next[section])) {
+      if (before && JSON.stringify(prev[id]) === JSON.stringify(value)) continue;
+      target[id] = value;
+      changed = true;
+    }
+    if (before) {
+      for (const id of Object.keys(prev)) {
+        if (id in next[section] || !(id in target)) continue;
+        delete target[id];
+        changed = true;
+      }
+    }
+    current[section] = target;
+  }
+  if (!changed && data) return;
+  const { error: saveError } = await supabase.from("settings").upsert([{ key: "ops_extras", value: current }], { onConflict: "key" });
+  throwIfError(saveError);
 }
 
 async function saveCatalogToSupabase(catalog) {
   const supabase = getSupabase();
-  const [productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay] = await Promise.all([
-    hasColumn("products", "cost"),
-    hasColumn("products", "sku"),
-    hasColumn("products", "active"),
-    hasColumn("clients", "address"),
-    hasColumn("sales", "unit_cost"),
-    hasColumn("sales", "payment_method"),
-    hasColumn("sales", "notes"),
-    hasColumn("fiado", "unit_cost"),
-    hasColumn("fiado", "payment_method")
-  ]);
+  const columns = await loadColumns();
+  const snapshot = snapshots.get(catalog);
+  const removals = [];
 
-  const clientIds = await upsertRows("clients", catalog.clients || [], (client) => clientToRowWithColumns(client, { address: clientAddress }));
-  const productIds = await upsertRows("products", catalog.products || [], (product) => productToRow(product, {
-    cost: productCost,
-    sku: productSku,
-    active: productActive
-  }));
-  const bannerIds = await upsertRows("banners", catalog.banners || [], bannerToRow);
-  const fiadoIds = await upsertRows("fiado", catalog.fiado || [], (entry) => fiadoToRow(entry, {
-    unitCost: fiadoCost,
-    paymentMethod: fiadoPay
-  }));
-  const saleIds = await upsertRows("sales", catalog.sales || [], (sale) => saleToRow(sale, {
-    unitCost: saleCost,
-    paymentMethod: salePay,
-    notes: saleNotes
-  }));
-  const prospectIds = await upsertRows("prospects", catalog.prospects || [], prospectToRow);
-
-  await pruneRows("sales", saleIds);
-  await pruneRows("fiado", fiadoIds);
-  await pruneRows("clients", clientIds);
-  await pruneRows("products", productIds);
-  await pruneRows("banners", bannerIds);
-  await pruneRows("prospects", prospectIds);
-
-  const settings = [{ key: "ops_extras", value: collectOpsExtras(catalog) }];
-  if (catalog.promoPopup) {
-    settings.push({ key: "promo_popup", value: catalog.promoPopup });
+  for (const [table, key, mapRow] of tableMappers(columns)) {
+    const current = rowsById(catalog[key], mapRow);
+    const before = snapshot?.tables[table];
+    const payload = [...current.entries()]
+      .filter(([id, entry]) => !before || before.get(id) !== entry.json)
+      .map(([, entry]) => entry.row);
+    if (payload.length) {
+      const { error } = await supabase.from(table).upsert(payload, { onConflict: "id" });
+      throwIfError(error);
+    }
+    if (before) {
+      const gone = [...before.keys()].filter((id) => !current.has(id));
+      if (gone.length) removals.push([table, gone]);
+    }
   }
-  const { error } = await supabase.from("settings").upsert(settings, { onConflict: "key" });
-  throwIfError(error);
+
+  // Remove na ordem inversa (vendas e fiados antes de clientes e produtos).
+  for (const [table, ids] of removals.reverse()) {
+    const { error } = await supabase.from(table).delete().in("id", ids);
+    throwIfError(error);
+  }
+
+  await saveOpsExtras(catalog, snapshot?.extras);
+
+  const promoJson = JSON.stringify(catalog.promoPopup ?? null);
+  if (catalog.promoPopup && (!snapshot || snapshot.promoPopup !== promoJson)) {
+    const { error } = await supabase.from("settings").upsert([{ key: "promo_popup", value: catalog.promoPopup }], { onConflict: "key" });
+    throwIfError(error);
+  }
+
+  // Depois de salvo, o catálogo em memória passa a ser a nova referência.
+  snapshots.set(catalog, takeSnapshot(catalog, columns));
 }
 
 module.exports = {
   loadCatalogFromSupabase,
-  saveCatalogToSupabase
+  saveCatalogToSupabase,
+  linkSnapshot
 };

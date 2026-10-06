@@ -2,6 +2,7 @@ const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
+const appError = document.getElementById("app-error");
 const productList = document.getElementById("product-list");
 const bannerList = document.getElementById("banner-list");
 const productDialog = document.getElementById("product-dialog");
@@ -33,6 +34,7 @@ let clientListFilter = "open";
 let stockFocusId = null;
 let lastSaleProductId = "";
 let lastFiadoProductId = "";
+let productStockSeen = null;
 
 async function request(url, options = {}) {
   let response;
@@ -47,7 +49,9 @@ async function request(url, options = {}) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || "Não foi possível concluir a ação.");
+    const error = new Error(data.error || "Não foi possível concluir a ação.");
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -65,6 +69,24 @@ function showPanel() {
 function showLogin() {
   appView.hidden = true;
   loginView.hidden = false;
+}
+
+// Uma falha ao carregar os dados não é falha de login: o painel fica aberto com
+// o aviso, e só volta para o login se a sessão realmente não existe.
+async function enterPanel() {
+  showPanel();
+  showError(appError, "");
+  try {
+    await loadCatalog();
+  } catch (error) {
+    if (error.status === 401) {
+      showLogin();
+      showError(loginError, "Login aceito, mas a sessão não foi salva. Libere os cookies deste site e tente de novo.");
+      return;
+    }
+    console.error(error);
+    showError(appError, `Não foi possível carregar os dados do painel: ${error.message} Recarregue a página.`);
+  }
 }
 
 function money(value) {
@@ -1316,8 +1338,13 @@ function fiadoPayloadFromEntry(entry, payments) {
     installmentAmount: entry.installmentAmount ?? 0,
     nextDueDate: entry.nextDueDate || "",
     notes: entry.notes || "",
-    payments
+    payments,
+    expectedPaymentIds: paymentIdsOf(entry)
   };
+}
+
+function paymentIdsOf(entry) {
+  return (entry?.payments || []).map((pay) => pay.id);
 }
 
 async function persistFiadoPayments(entry, payments) {
@@ -1471,6 +1498,7 @@ function openProduct(product) {
   productForm.elements.description.value = product?.description || "";
   productForm.elements.detailsText.value = (product?.details || []).join("\n");
   productForm.elements.stock.value = product?.stock ?? 1;
+  productStockSeen = product ? Number(product.stock ?? 0) : null;
   productForm.elements.showOnHome.checked = product ? product.showOnHome !== false : true;
   productImages = product?.images?.length ? [...product.images] : (product?.image ? [product.image] : []);
   renderPhotoPreviews();
@@ -1616,14 +1644,13 @@ loginForm.addEventListener("submit", async (event) => {
         password: String(form.get("password") || "")
       })
     });
-    showPanel();
-    await loadCatalog();
   } catch (error) {
-    showLogin();
     showError(loginError, error.message);
+    return;
   } finally {
     submitBtn.disabled = false;
   }
+  await enterPanel();
 });
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
@@ -1717,7 +1744,8 @@ document.getElementById("fiado-edit-form").addEventListener("submit", async (eve
         installmentAmount: Number(form.elements.installmentAmount.value || 0),
         nextDueDate: form.elements.nextDueDate.value,
         notes: form.elements.notes.value,
-        payments: collectFiadoPaymentEditor()
+        payments: collectFiadoPaymentEditor(),
+        expectedPaymentIds: paymentIdsOf(catalog.fiado.find((item) => item.id === form.elements.id.value))
       })
     });
     document.getElementById("fiado-edit-dialog").close();
@@ -1964,6 +1992,7 @@ productForm.addEventListener("submit", async (event) => {
   const payload = Object.fromEntries(new FormData(productForm).entries());
   payload.showOnHome = productForm.elements.showOnHome.checked;
   payload.stock = Number(payload.stock || 0);
+  if (payload.id && productStockSeen !== null) payload.stockSeen = productStockSeen;
   payload.images = productImages;
   payload.image = productImages[0] || "";
   if (!payload.image) {
@@ -2277,8 +2306,24 @@ function setupAdminPwa() {
 setupAdminPwa();
 
 request("/api/admin/me")
-  .then(async () => {
-    showPanel();
-    await loadCatalog();
-  })
-  .catch(showLogin);
+  .then(enterPanel, showLogin);
+
+// O app instalado no celular fica aberto por horas. Ao voltar para ele, busca os
+// dados de novo para mostrar vendas e abatimentos feitos em outro aparelho.
+let lastRefreshAt = Date.now();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || appView.hidden) return;
+  if (Date.now() - lastRefreshAt < 15000) return;
+  if (document.querySelector("dialog[open]")) return;
+  lastRefreshAt = Date.now();
+  loadCatalog()
+    .then(() => showError(appError, ""))
+    .catch((error) => {
+      if (error.status === 401) {
+        showLogin();
+        showError(loginError, error.message);
+        return;
+      }
+      showError(appError, `Não foi possível atualizar os dados: ${error.message}`);
+    });
+});

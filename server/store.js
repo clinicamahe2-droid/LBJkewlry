@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { useSupabase } = require("./supabase");
-const { loadCatalogFromSupabase, saveCatalogToSupabase } = require("./supabase-db");
+const { loadCatalogFromSupabase, saveCatalogToSupabase, linkSnapshot } = require("./supabase-db");
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const CATALOG_PATH = path.join(DATA_DIR, "catalog.json");
@@ -10,6 +10,18 @@ const ADMIN_PATH = path.join(DATA_DIR, "admin.json");
 
 const CATEGORIES = new Set(["correntes", "brincos", "pulseiras", "aneis"]);
 const BADGES = new Set(["sale", "new", ""]);
+
+// Toda alteração lê o catálogo, muda e salva. A fila faz uma alteração esperar
+// a anterior terminar, para que duas ações simultâneas não se sobrescrevam.
+let writeQueue = Promise.resolve();
+
+function serialized(fn) {
+  return (...args) => {
+    const run = writeQueue.then(() => fn(...args));
+    writeQueue = run.catch(() => {});
+    return run;
+  };
+}
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -201,13 +213,16 @@ function refreshFiadoStatus(entry) {
 
 async function loadCatalog() {
   if (useSupabase()) {
-    let catalog = await loadCatalogFromSupabase();
-    if (!catalog.products.length && fs.existsSync(SEED_PATH)) {
+    const catalog = await loadCatalogFromSupabase();
+    // Só semeia um banco totalmente vazio; nunca sobre vendas, clientes ou fiados existentes.
+    const empty = ["products", "banners", "sales", "clients", "fiado", "prospects"]
+      .every((key) => !catalog[key]?.length);
+    if (empty && fs.existsSync(SEED_PATH)) {
       const seeded = migrateCatalogData(readJson(SEED_PATH)).catalog;
       await saveCatalogToSupabase(seeded);
       return seeded;
     }
-    return migrateCatalogData(catalog).catalog;
+    return linkSnapshot(catalog, migrateCatalogData(catalog).catalog);
   }
 
   ensureDir(DATA_DIR);
@@ -339,16 +354,81 @@ function normalizeProduct(input, existingId) {
   };
 }
 
+function toPublicProduct(product) {
+  const { cost, sku, active, ...publicProduct } = product;
+  return publicProduct;
+}
+
+function isPublished(product) {
+  return product.active !== false && Number(product.stock) > 0;
+}
+
+async function publicProduct(productId) {
+  const catalog = await loadCatalog();
+  const product = catalog.products.find((item) => item.id === productId);
+  return product && isPublished(product) ? toPublicProduct(product) : null;
+}
+
+async function createProduct(input) {
+  const catalog = await loadCatalog();
+  const product = normalizeProduct(input);
+  if (catalog.products.some((item) => item.id === product.id)) {
+    product.id = `${product.id}-${Date.now().toString(36)}`;
+  }
+  catalog.products.push(product);
+  await saveCatalog(catalog);
+  return product;
+}
+
+async function updateProduct(productId, input) {
+  const catalog = await loadCatalog();
+  const index = catalog.products.findIndex((item) => item.id === productId);
+  if (index === -1) {
+    throw new Error("Produto não encontrado.");
+  }
+  const product = normalizeProduct(input, productId);
+  // O formulário manda o estoque que mostrava ao abrir (stockSeen). Aplica só a
+  // diferença digitada, para não desfazer vendas feitas enquanto ele estava aberto.
+  const seen = Number(input.stockSeen);
+  if (input.stockSeen !== undefined && input.stockSeen !== "" && Number.isFinite(seen)) {
+    const current = Math.max(0, Math.floor(toNumber(catalog.products[index].stock)));
+    product.stock = Math.max(0, current + (product.stock - Math.floor(seen)));
+  }
+  catalog.products[index] = product;
+  await saveCatalog(catalog);
+  return product;
+}
+
+async function deleteProduct(productId) {
+  const catalog = await loadCatalog();
+  const next = catalog.products.filter((item) => item.id !== productId);
+  if (next.length === catalog.products.length) {
+    throw new Error("Produto não encontrado.");
+  }
+  catalog.products = next;
+  await saveCatalog(catalog);
+  return { ok: true };
+}
+
+async function saveBanners(input) {
+  const banners = Array.isArray(input?.banners) ? input.banners : [];
+  if (!banners.length) {
+    throw new Error("Inclua pelo menos um banner.");
+  }
+  const catalog = await loadCatalog();
+  catalog.banners = banners.map(normalizeBanner);
+  if (input?.promoPopup) {
+    catalog.promoPopup = normalizePromoPopup(input.promoPopup);
+  }
+  await saveCatalog(catalog);
+  return { banners: catalog.banners, promoPopup: catalog.promoPopup };
+}
+
 async function publicCatalog() {
   const catalog = await loadCatalog();
   const popup = normalizePromoPopup(catalog.promoPopup);
   return {
-    products: catalog.products
-      .filter((product) => product.active !== false && Number(product.stock) > 0)
-      .map((product) => {
-        const { cost, sku, active, ...publicProduct } = product;
-        return publicProduct;
-      }),
+    products: catalog.products.filter(isPublished).map(toPublicProduct),
     banners: catalog.banners,
     promoPopup: popup.enabled
       ? {
@@ -638,6 +718,15 @@ async function updateFiado(fiadoId, input) {
   }
 
   const entry = catalog.fiado[index];
+  // A edição manda a lista inteira de abatimentos. Se outro aparelho registrou ou
+  // removeu um abatimento depois que esta tela abriu, recusa em vez de apagá-lo.
+  if (Array.isArray(input.expectedPaymentIds)) {
+    const seen = [...input.expectedPaymentIds].map(String).sort().join(",");
+    const current = (entry.payments || []).map((pay) => String(pay.id)).sort().join(",");
+    if (seen !== current) {
+      throw new Error("Este fiado foi alterado em outro aparelho. Feche, atualize a página e abra de novo.");
+    }
+  }
   const quantity = Math.max(1, Math.floor(toNumber(input.quantity ?? entry.quantity) || 1));
   const unitPrice = Math.max(0, toNumber(input.unitPrice ?? entry.unitPrice));
   const total = unitPrice * quantity;
@@ -746,16 +835,21 @@ module.exports = {
   normalizeClient,
   normalizePromoPopup,
   defaultPromoPopup,
-  registerProspect,
-  deleteProspect,
   publicCatalog,
-  recordSale,
-  recordFiadoSale,
-  recordFiadoPayment,
-  updateFiado,
-  saveClient,
-  deleteClient,
-  adjustStock,
+  publicProduct,
+  registerProspect: serialized(registerProspect),
+  deleteProspect: serialized(deleteProspect),
+  createProduct: serialized(createProduct),
+  updateProduct: serialized(updateProduct),
+  deleteProduct: serialized(deleteProduct),
+  saveBanners: serialized(saveBanners),
+  recordSale: serialized(recordSale),
+  recordFiadoSale: serialized(recordFiadoSale),
+  recordFiadoPayment: serialized(recordFiadoPayment),
+  updateFiado: serialized(updateFiado),
+  saveClient: serialized(saveClient),
+  deleteClient: serialized(deleteClient),
+  adjustStock: serialized(adjustStock),
   slugify,
   DATA_DIR
 };

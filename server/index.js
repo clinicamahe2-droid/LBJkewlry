@@ -59,6 +59,10 @@ async function ensureAdmin() {
   if (admin?.passwordHash) return admin;
 
   const user = process.env.ADMIN_USER || "admin";
+  if (IS_SERVERLESS && !process.env.ADMIN_PASSWORD) {
+    // Sem ADMIN_PASSWORD, cada instância nova da Vercel sorteia uma senha diferente.
+    console.error("ADMIN_PASSWORD não está definido na Vercel: o login do painel vai falhar.");
+  }
   const password = process.env.ADMIN_PASSWORD || `LB-${crypto.randomBytes(4).toString("hex")}`;
   admin = {
     user,
@@ -213,8 +217,7 @@ async function createApp() {
 
   app.get("/api/products/:id", async (req, res) => {
     try {
-      const catalog = await store.loadCatalog();
-      const product = catalog.products.find((item) => item.id === req.params.id);
+      const product = await store.publicProduct(req.params.id);
       if (!product) {
         res.status(404).json({ error: "Produto não encontrado." });
         return;
@@ -245,6 +248,7 @@ async function createApp() {
     const validPass = passwordMatches(password, adminAccount.passwordHash);
     if (!validUser || !validPass) {
       req.loginRecord.count += 1;
+      console.warn(`[login] falhou (${!validUser ? "usuário" : "senha"} não confere), tentativa ${req.loginRecord.count} deste IP`);
       res.status(401).json({ error: "Usuário ou senha inválidos." });
       return;
     }
@@ -341,14 +345,7 @@ async function createApp() {
 
   app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
-      const catalog = await store.loadCatalog();
-      const product = store.normalizeProduct(req.body);
-      if (catalog.products.some((item) => item.id === product.id)) {
-        product.id = `${product.id}-${Date.now().toString(36)}`;
-      }
-      catalog.products.push(product);
-      await store.saveCatalog(catalog);
-      res.status(201).json(product);
+      res.status(201).json(await store.createProduct(req.body || {}));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -356,16 +353,7 @@ async function createApp() {
 
   app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
-      const catalog = await store.loadCatalog();
-      const index = catalog.products.findIndex((item) => item.id === req.params.id);
-      if (index === -1) {
-        res.status(404).json({ error: "Produto não encontrado." });
-        return;
-      }
-      const product = store.normalizeProduct(req.body, req.params.id);
-      catalog.products[index] = product;
-      await store.saveCatalog(catalog);
-      res.json(product);
+      res.json(await store.updateProduct(req.params.id, req.body || {}));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -373,15 +361,7 @@ async function createApp() {
 
   app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
-      const catalog = await store.loadCatalog();
-      const next = catalog.products.filter((item) => item.id !== req.params.id);
-      if (next.length === catalog.products.length) {
-        res.status(404).json({ error: "Produto não encontrado." });
-        return;
-      }
-      catalog.products = next;
-      await store.saveCatalog(catalog);
-      res.json({ ok: true });
+      res.json(await store.deleteProduct(req.params.id));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -389,17 +369,7 @@ async function createApp() {
 
   app.put("/api/admin/banners", requireAdmin, async (req, res) => {
     try {
-      const banners = Array.isArray(req.body?.banners) ? req.body.banners : [];
-      if (!banners.length) {
-        throw new Error("Inclua pelo menos um banner.");
-      }
-      const catalog = await store.loadCatalog();
-      catalog.banners = banners.map(store.normalizeBanner);
-      if (req.body?.promoPopup) {
-        catalog.promoPopup = store.normalizePromoPopup(req.body.promoPopup);
-      }
-      await store.saveCatalog(catalog);
-      res.json({ banners: catalog.banners, promoPopup: catalog.promoPopup });
+      res.json(await store.saveBanners(req.body));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
