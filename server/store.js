@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { useSupabase } = require("./supabase");
@@ -21,6 +22,12 @@ function serialized(fn) {
     writeQueue = run.catch(() => {});
     return run;
   };
+}
+
+// Hora + sufixo aleatório: dois servidores gravando no mesmo milissegundo
+// (PC local e Vercel) não geram o mesmo id.
+function newId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}${crypto.randomBytes(3).toString("hex")}`;
 }
 
 function ensureDir(dir) {
@@ -136,7 +143,7 @@ function normalizeProspect(input, couponCode) {
   }
   const phone = normalizePhoneDigits(input.phone);
   return {
-    id: stripTags(input.id) || `prospect-${Date.now().toString(36)}`,
+    id: stripTags(input.id) || newId("prospect"),
     name,
     phone,
     couponCode: stripTags(couponCode),
@@ -373,7 +380,7 @@ async function createProduct(input) {
   const catalog = await loadCatalog();
   const product = normalizeProduct(input);
   if (catalog.products.some((item) => item.id === product.id)) {
-    product.id = `${product.id}-${Date.now().toString(36)}`;
+    product.id = newId(product.id);
   }
   catalog.products.push(product);
   await saveCatalog(catalog);
@@ -450,7 +457,7 @@ function normalizeClient(input, existingId) {
     throw new Error("Telefone do cliente é obrigatório.");
   }
   return {
-    id: existingId || stripTags(input.id) || `client-${Date.now().toString(36)}`,
+    id: existingId || stripTags(input.id) || newId("client"),
     name,
     phone,
     address: stripTags(input.address),
@@ -529,7 +536,7 @@ async function recordSale(input) {
   product.stock -= quantity;
 
   const sale = {
-    id: `sale-${Date.now().toString(36)}`,
+    id: newId("sale"),
     type: "cash",
     productId: product.id,
     productName: product.name,
@@ -574,9 +581,9 @@ async function recordFiadoSale(input) {
 
   product.stock -= quantity;
   const now = new Date().toISOString();
-  const fiadoId = `fiado-${Date.now().toString(36)}`;
+  const fiadoId = newId("fiado");
   const payments = downPayment > 0
-    ? [{ id: `pay-${Date.now().toString(36)}`, amount: downPayment, paidAt: now, note: "Entrada" }]
+    ? [{ id: newId("pay"), amount: downPayment, paidAt: now, note: "Entrada" }]
     : [];
 
   const fiado = refreshFiadoStatus({
@@ -601,7 +608,7 @@ async function recordFiadoSale(input) {
   });
 
   const sale = {
-    id: `sale-${Date.now().toString(36)}`,
+    id: newId("sale"),
     type: "fiado",
     fiadoId,
     clientId: client.id,
@@ -645,7 +652,7 @@ async function recordFiadoPayment(fiadoId, input) {
 
   const now = new Date().toISOString();
   const payments = [...(entry.payments || []), {
-    id: `pay-${Date.now().toString(36)}`,
+    id: newId("pay"),
     amount,
     paidAt: now,
     note: stripTags(input.note) || "Abatimento"
@@ -671,7 +678,7 @@ async function recordFiadoPayment(fiadoId, input) {
 
   catalog.fiado[index] = updated;
   catalog.sales.unshift({
-    id: `sale-${Date.now().toString(36)}`,
+    id: newId("sale"),
     type: "fiado_payment",
     fiadoId: entry.id,
     clientId: entry.clientId,
@@ -702,7 +709,7 @@ function normalizeFiadoPayments(rawPayments, fallback = []) {
       throw new Error("Data de abatimento inválida.");
     }
     return {
-      id: stripTags(pay.id) || `pay-${Date.now().toString(36)}-${index}`,
+      id: stripTags(pay.id) || newId("pay"),
       amount,
       paidAt,
       note: stripTags(pay.note) || "Abatimento"

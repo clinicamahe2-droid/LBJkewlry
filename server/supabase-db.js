@@ -217,90 +217,74 @@ function prospectFromRow(row) {
 }
 
 const columnCache = new Map();
+const MISSING_COLUMN_RECHECK_MS = 60 * 1000;
 
+// "Existe" fica guardado de vez; "não existe" é conferido de novo a cada minuto,
+// para o servidor perceber uma coluna criada no Supabase sem precisar reiniciar.
 async function hasColumn(table, column) {
   const key = `${table}.${column}`;
-  if (columnCache.has(key)) return columnCache.get(key);
+  const cached = columnCache.get(key);
+  if (cached && (cached.ok || Date.now() - cached.at < MISSING_COLUMN_RECHECK_MS)) return cached.ok;
   const { error } = await getSupabase().from(table).select(column).limit(1);
   const ok = !error;
-  columnCache.set(key, ok);
+  columnCache.set(key, { ok, at: Date.now() });
   return ok;
 }
 
-function collectOpsExtras(catalog) {
-  return {
-    products: Object.fromEntries((catalog.products || []).map((product) => [
-      product.id,
-      {
-        cost: Number(product.cost) || 0,
-        sku: product.sku || "",
-        active: product.active !== false
-      }
-    ])),
-    sales: Object.fromEntries((catalog.sales || []).map((sale) => [
-      sale.id,
-      {
-        unitCost: Number(sale.unitCost) || 0,
-        paymentMethod: sale.paymentMethod || "",
-        notes: sale.notes || ""
-      }
-    ])),
-    fiado: Object.fromEntries((catalog.fiado || []).map((entry) => [
-      entry.id,
-      {
-        unitCost: Number(entry.unitCost) || 0,
-        paymentMethod: entry.paymentMethod || ""
-      }
-    ])),
-    clients: Object.fromEntries((catalog.clients || []).map((client) => [
-      client.id,
-      { address: client.address || "" }
-    ]))
-  };
+// Campos que vivem em colunas próprias quando elas existem. Sem a coluna, o valor
+// fica no settings.ops_extras (um único JSON compartilhado).
+const EXTRA_FIELDS = {
+  products: [
+    ["cost", "productCost", (item) => Number(item.cost) || 0],
+    ["sku", "productSku", (item) => item.sku || ""],
+    ["active", "productActive", (item) => item.active !== false]
+  ],
+  sales: [
+    ["unitCost", "saleCost", (item) => Number(item.unitCost) || 0],
+    ["paymentMethod", "salePay", (item) => item.paymentMethod || ""],
+    ["notes", "saleNotes", (item) => item.notes || ""]
+  ],
+  fiado: [
+    ["unitCost", "fiadoCost", (item) => Number(item.unitCost) || 0],
+    ["paymentMethod", "fiadoPay", (item) => item.paymentMethod || ""]
+  ],
+  clients: [
+    ["address", "clientAddress", (item) => item.address || ""]
+  ]
+};
+
+function missingFields(section, columns) {
+  return EXTRA_FIELDS[section].filter(([, flag]) => !columns[flag]);
 }
 
-function preferNumber(primary, fallback) {
-  const first = Number(primary);
-  if (Number.isFinite(first) && first > 0) return first;
-  const second = Number(fallback);
-  return Number.isFinite(second) ? second : 0;
+function collectOpsExtras(catalog, columns = {}) {
+  const extras = {};
+  for (const section of Object.keys(EXTRA_FIELDS)) {
+    const missing = missingFields(section, columns);
+    extras[section] = {};
+    if (!missing.length) continue;
+    for (const item of catalog[section] || []) {
+      extras[section][item.id] = Object.fromEntries(missing.map(([field, , read]) => [field, read(item)]));
+    }
+  }
+  return extras;
 }
 
-function applyOpsExtras(catalog, extras) {
+function applyOpsExtras(catalog, extras, columns = {}) {
   if (!extras || typeof extras !== "object") return catalog;
-  catalog.products = (catalog.products || []).map((product) => {
-    const extra = extras.products?.[product.id] || {};
-    return {
-      ...product,
-      cost: preferNumber(product.cost, extra.cost),
-      sku: product.sku || extra.sku || "",
-      active: product.active !== false && extra.active !== false
-    };
-  });
-  catalog.sales = (catalog.sales || []).map((sale) => {
-    const extra = extras.sales?.[sale.id] || {};
-    return {
-      ...sale,
-      unitCost: preferNumber(sale.unitCost, extra.unitCost),
-      paymentMethod: sale.paymentMethod || extra.paymentMethod || "",
-      notes: sale.notes || extra.notes || ""
-    };
-  });
-  catalog.fiado = (catalog.fiado || []).map((entry) => {
-    const extra = extras.fiado?.[entry.id] || {};
-    return {
-      ...entry,
-      unitCost: preferNumber(entry.unitCost, extra.unitCost),
-      paymentMethod: entry.paymentMethod || extra.paymentMethod || ""
-    };
-  });
-  catalog.clients = (catalog.clients || []).map((client) => {
-    const extra = extras.clients?.[client.id] || {};
-    return {
-      ...client,
-      address: client.address || extra.address || ""
-    };
-  });
+  for (const section of Object.keys(EXTRA_FIELDS)) {
+    const missing = missingFields(section, columns);
+    if (!missing.length) continue;
+    catalog[section] = (catalog[section] || []).map((item) => {
+      const extra = extras[section]?.[item.id];
+      if (!extra) return item;
+      const next = { ...item };
+      for (const [field] of missing) {
+        if (extra[field] !== undefined) next[field] = extra[field];
+      }
+      return next;
+    });
+  }
   return catalog;
 }
 
@@ -361,7 +345,7 @@ function takeSnapshot(catalog, columns) {
   }
   return {
     tables,
-    extras: collectOpsExtras(catalog),
+    extras: collectOpsExtras(catalog, columns),
     promoPopup: JSON.stringify(catalog.promoPopup ?? null)
   };
 }
@@ -394,6 +378,7 @@ async function loadCatalogFromSupabase() {
   throwIfError(settingsRes.error);
 
   const settings = Object.fromEntries((settingsRes.data || []).map((row) => [row.key, row.value]));
+  const columns = await loadColumns();
   const catalog = applyOpsExtras({
     products: (productsRes.data || []).map(productFromRow),
     banners: (bannersRes.data || []).map(bannerFromRow),
@@ -402,19 +387,21 @@ async function loadCatalogFromSupabase() {
     fiado: (fiadoRes.data || []).map(fiadoFromRow),
     prospects: (prospectsRes.data || []).map(prospectFromRow),
     promoPopup: settings.promo_popup || null
-  }, settings.ops_extras);
-  snapshots.set(catalog, takeSnapshot(catalog, await loadColumns()));
+  }, settings.ops_extras, columns);
+  snapshots.set(catalog, takeSnapshot(catalog, columns));
   return catalog;
 }
 
 // Aplica em cima do ops_extras atual do banco só o que este pedido mudou,
 // para não sobrescrever custos/formas de pagamento gravados por outro aparelho.
-async function saveOpsExtras(catalog, before) {
+async function saveOpsExtras(catalog, before, columns) {
+  const next = collectOpsExtras(catalog, columns);
+  // Com todas as colunas criadas, nada vai para o ops_extras.
+  if (Object.values(next).every((section) => !Object.keys(section).length)) return;
   const supabase = getSupabase();
   const { data, error } = await supabase.from("settings").select("value").eq("key", "ops_extras").maybeSingle();
   throwIfError(error);
   const current = data?.value && typeof data.value === "object" ? data.value : {};
-  const next = collectOpsExtras(catalog);
   let changed = false;
   for (const section of Object.keys(next)) {
     const target = { ...(current[section] || {}) };
@@ -466,7 +453,7 @@ async function saveCatalogToSupabase(catalog) {
     throwIfError(error);
   }
 
-  await saveOpsExtras(catalog, snapshot?.extras);
+  await saveOpsExtras(catalog, snapshot?.extras, columns);
 
   const promoJson = JSON.stringify(catalog.promoPopup ?? null);
   if (catalog.promoPopup && (!snapshot || snapshot.promoPopup !== promoJson)) {
