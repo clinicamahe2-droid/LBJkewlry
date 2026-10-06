@@ -163,17 +163,28 @@ async function main() {
     throw new Error("Arquivo não é um backup do VendaFácil.");
   }
 
+  const dryRun = process.argv.includes("--dry-run");
   const current = await store.loadCatalog();
-  const reusePhotos = process.env.SKIP_PHOTOS === "1";
-  const existingImages = new Map((current.products || []).map((item) => [item.id, item.image]));
-  console.log(reusePhotos ? "Reaproveitando fotos já enviadas" : `Fotos: ${backup.produtos.length}`);
-  const images = reusePhotos
-    ? backup.produtos.map((item) => existingImages.get(productId(item.id)) || "/assets/logo-lb.png")
-    : await mapPool(backup.produtos, 4, async (item, index) => {
-      const url = await savePhoto(item);
-      if ((index + 1) % 10 === 0) console.log(`  ${index + 1}/${backup.produtos.length}`);
-      return url;
+  const skipPhotos = process.env.SKIP_PHOTOS === "1" || dryRun;
+  const existingProducts = new Map((current.products || []).map((item) => [item.id, item]));
+  const existingFiado = new Set((current.fiado || []).map((item) => item.id));
+  // Só envia foto de peça nova (ou que ainda está com o logo). As demais mantêm
+  // as fotos que já estão na loja, inclusive as extras colocadas pelo painel.
+  const needsPhoto = (item) => {
+    const existing = existingProducts.get(productId(item.id));
+    return !existing || !existing.image || existing.image === "/assets/logo-lb.png";
+  };
+  const toUpload = backup.produtos.filter(needsPhoto);
+  console.log(skipPhotos ? `Fotos novas: ${toUpload.length} (não enviadas)` : `Fotos novas: ${toUpload.length}`);
+  const uploaded = new Map();
+  if (!skipPhotos) {
+    await mapPool(toUpload, 4, async (item) => {
+      uploaded.set(item.id, await savePhoto(item));
     });
+  }
+  const images = backup.produtos.map((item) => (
+    uploaded.get(item.id) || existingProducts.get(productId(item.id))?.image || "/assets/logo-lb.png"
+  ));
 
   const products = backup.produtos.map((item, index) => {
     const categorySlug = inferCategory(item.nome);
@@ -181,6 +192,24 @@ async function main() {
     const stock = Math.max(0, Math.floor(Number(item.quantidade) || 0));
     const active = item.ativo !== false;
     const image = images[index];
+    const existing = existingProducts.get(productId(item.id));
+    if (existing) {
+      // O VendaFácil manda nos dados de operação; a vitrine (fotos, categoria,
+      // selo, detalhes, home) continua como foi ajustada no painel da loja.
+      return {
+        ...existing,
+        name: clean(item.nome),
+        sku: clean(item.codigo),
+        priceMin: price,
+        priceMax: price,
+        cost: cents(Math.max(0, Number(item.custo) || 0)),
+        stock,
+        active,
+        description: clean(item.descricao) || existing.description || "",
+        image: existing.image && existing.image !== "/assets/logo-lb.png" ? existing.image : image,
+        images: existing.images?.length && existing.image !== "/assets/logo-lb.png" ? existing.images : [image]
+      };
+    }
     return {
       id: productId(item.id),
       name: clean(item.nome),
@@ -242,7 +271,10 @@ async function main() {
       knownClients.add(created.id);
       resolvedClientId = created.id;
     }
-    if (!knownProducts.has(id) && line.nome) {
+    if (!knownProducts.has(id) && existingProducts.has(id)) {
+      products.push(existingProducts.get(id));
+      knownProducts.add(id);
+    } else if (!knownProducts.has(id) && line.nome) {
       products.push({
         id,
         name: clean(line.nome),
@@ -266,7 +298,11 @@ async function main() {
       knownProducts.add(id);
     }
 
-    const open = venda.statusPagamento === "parcial" || pending > 0;
+    // Fiado quitado continua como fiado (pago), para manter o histórico de
+    // abatimentos na aba Fiado em vez de virar venda à vista.
+    const open = venda.statusPagamento === "parcial"
+      || pending > 0
+      || existingFiado.has(`vf-fiado-${venda.id}`);
     const notes = saleNotes(venda);
     const method = paymentLabel(venda.formaPagamento);
 
@@ -342,13 +378,38 @@ async function main() {
   sales.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   fiado.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
+  // Registros criados direto no painel da loja (sem prefixo vf-) são mantidos.
+  const keepLocal = (list, imported) => {
+    const ids = new Set(imported.map((item) => item.id));
+    return (list || []).filter((item) => !String(item.id).startsWith("vf-") && !ids.has(item.id));
+  };
   const catalog = {
     ...current,
-    products,
-    clients,
-    sales,
-    fiado
+    products: [...products, ...keepLocal(current.products, products)],
+    clients: [...clients, ...keepLocal(current.clients, clients)],
+    sales: [...sales, ...keepLocal(current.sales, sales)]
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
+    fiado: [...fiado, ...keepLocal(current.fiado, fiado)]
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
   };
+
+  const lost = ["products", "clients", "sales", "fiado"].flatMap((key) => {
+    const ids = new Set(catalog[key].map((item) => item.id));
+    return (current[key] || []).filter((item) => !ids.has(item.id)).map((item) => `${key}/${item.id}`);
+  });
+  if (lost.length) {
+    console.log(`Atenção: ${lost.length} registro(s) do banco não estão no backup e ficam como estão: ${lost.join(", ")}`);
+  }
+
+  if (dryRun) {
+    for (const key of ["products", "clients", "sales", "fiado"]) {
+      const before = new Map((current[key] || []).map((item) => [item.id, JSON.stringify(item)]));
+      const added = catalog[key].filter((item) => !before.has(item.id));
+      console.log(`${key}: ${added.length} novo(s)${added.length ? ` — ${added.map((item) => item.name || item.productName).join(", ")}` : ""}`);
+    }
+    console.log("Simulação: nada foi gravado.");
+    return;
+  }
 
   await store.saveCatalog(catalog);
   const openFiado = fiado.filter((item) => item.status !== "paid").length;
