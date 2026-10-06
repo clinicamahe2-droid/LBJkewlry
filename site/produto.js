@@ -23,7 +23,7 @@
     const descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.content = product.description;
 
-    const displayPrice = product.priceList || product.priceMax;
+    const displayPrice = product.priceMax;
     const hasSale = Boolean(product.priceList && product.priceList > product.priceMax);
     const hasRange = product.priceMin !== product.priceMax;
     const variants = (product.thickness || []).filter((value) => value && value !== "Único");
