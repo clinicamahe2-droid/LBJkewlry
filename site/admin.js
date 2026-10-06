@@ -1,1529 +1,125 @@
-const loginView = document.getElementById("login-view");
-const appView = document.getElementById("app-view");
-const loginForm = document.getElementById("login-form");
-const loginError = document.getElementById("login-error");
-const appError = document.getElementById("app-error");
-const productList = document.getElementById("product-list");
-const bannerList = document.getElementById("banner-list");
-const productDialog = document.getElementById("product-dialog");
-const productForm = document.getElementById("product-form");
-const productError = document.getElementById("product-error");
-const productSearch = document.getElementById("product-search");
-const stockSearch = document.getElementById("stock-search");
+/* LB jewelry · painel da loja */
 
 const CATEGORIES = [
   { slug: "correntes", label: "Correntes" },
-  { slug: "brincos", label: "Brincos" },
   { slug: "pulseiras", label: "Pulseiras" },
+  { slug: "brincos", label: "Brincos" },
   { slug: "aneis", label: "Anéis" }
 ];
+const PHOTO_SLOTS = [["Peça", "1ª foto"], ["Mostruário", "2ª foto"], ["Em uso", "3ª foto"]];
+const PAYMENT_METHODS = ["PIX", "Dinheiro", "Cartão"];
+const MAX_BANNER_VIDEO_BYTES = 50 * 1024 * 1024;
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const MONTHS_LONG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [], prospects: [], promoPopup: {} };
-let productImages = [];
-let soldProductIds = new Set();
-const listFilter = {
-  products: { category: "all", view: "available", promoOnly: false, homeOnly: false },
-  stock: { category: "all", view: "available" }
+const state = {
+  screen: "home",
+  pecas: { view: "available", filter: "all", q: "" },
+  vendas: { period: "month", category: "all", limit: 40 },
+  fiado: { view: "cobrar", q: "", clients: "open" },
+  heroIndex: 0
 };
-const salesFilter = { period: "all", category: "all" };
-const fiadoFilter = { status: "all" };
-let fiadoView = "cobrar";
-let fiadoSearchQuery = "";
-let clientSearchQuery = "";
-let clientListFilter = "open";
-let stockFocusId = null;
-let lastSaleProductId = "";
-let lastFiadoProductId = "";
-let productStockSeen = null;
+let loaded = false;
+let sheetBack = null;
+let draft = null;
 
+// ---------- utilidades ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const icon = (id, cls = "") => `<svg class="i ${cls}"><use href="#i-${id}"/></svg>`;
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const brl = (v, cents) => {
+  const n = num(v);
+  const showCents = cents ?? Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: showCents ? 2 : 0, maximumFractionDigits: 2 });
+};
+const moneyTxt = (v) => `R$ ${brl(v)}`;
+const money = (v) => `<span class="money"><span class="cur">R$</span>${brl(v)}</span>`;
+const moneyK = (v) => {
+  const n = num(v);
+  if (Math.abs(n) >= 100000) return `<span class="money"><span class="cur">R$</span>${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} mil</span>`;
+  return money(Math.round(n));
+};
+
+function parseMoney(value) {
+  let s = String(value ?? "").trim().replace(/[R$\s]/g, "");
+  if (!s) return 0;
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+const moneyInput = (v) => (num(v) ? brl(v) : "");
+
+function localISO(date = new Date()) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function addDays(iso, days) {
+  const d = new Date(`${iso || localISO()}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return localISO(d);
+}
+function fmtDate(value) {
+  if (!value) return "—";
+  const s = String(value);
+  const d = new Date(s.length === 10 ? `${s}T12:00:00` : s);
+  if (Number.isNaN(d.getTime())) return s;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function fmtDateFull(value) {
+  if (!value) return "—";
+  const s = String(value);
+  const d = new Date(s.length === 10 ? `${s}T12:00:00` : s);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("pt-BR");
+}
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function dayLabel(iso) {
+  const today = localISO();
+  if (iso === today) return "Hoje";
+  if (iso === addDays(today, -1)) return "Ontem";
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short" }).replace(".", "");
+}
+const phoneDigits = (p) => String(p || "").replace(/\D/g, "");
+function fmtPhone(p) {
+  const d = phoneDigits(p);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return p || "";
+}
+function whatsAppLink(phone, message) {
+  const d = phoneDigits(phone);
+  if (d.length < 10) return "";
+  const full = d.startsWith("55") && d.length >= 12 ? d : `55${d}`;
+  return `https://wa.me/${full}?text=${encodeURIComponent(message)}`;
+}
+const initials = (name) => String(name || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// ---------- servidor ----------
 async function request(url, options = {}) {
   let response;
   try {
-    response = await fetch(url, {
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-      ...options
-    });
+    response = await fetch(url, { credentials: "same-origin", headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
   } catch {
-    throw new Error("Servidor offline. Abra http://localhost:3480/admin");
+    throw new Error("Sem conexão com o servidor. Confira a internet e tente de novo.");
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data.error || "Não foi possível concluir a ação.");
     error.status = response.status;
+    if (response.status === 401 && !url.endsWith("/login") && !url.endsWith("/me")) {
+      closeSheet();
+      showLogin("Sua sessão expirou. Entre de novo para continuar.");
+    }
     throw error;
   }
   return data;
-}
-
-function showError(node, message) {
-  node.hidden = !message;
-  node.textContent = message || "";
-}
-
-function showPanel() {
-  loginView.hidden = true;
-  appView.hidden = false;
-}
-
-function showLogin() {
-  appView.hidden = true;
-  loginView.hidden = false;
-}
-
-// Uma falha ao carregar os dados não é falha de login: o painel fica aberto com
-// o aviso, e só volta para o login se a sessão realmente não existe.
-async function enterPanel() {
-  showPanel();
-  showError(appError, "");
-  try {
-    await loadCatalog();
-  } catch (error) {
-    if (error.status === 401) {
-      showLogin();
-      showError(loginError, "Login aceito, mas a sessão não foi salva. Libere os cookies deste site e tente de novo.");
-      return;
-    }
-    console.error(error);
-    showError(appError, `Não foi possível carregar os dados do painel: ${error.message} Recarregue a página.`);
-  }
-}
-
-function money(value) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("pt-BR");
-}
-
-function formatShortDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("pt-BR");
-}
-
-function phoneDigits(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
-
-function whatsAppLink(phone, message) {
-  const digits = phoneDigits(phone);
-  if (digits.length < 10) return "";
-  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
-}
-
-function fiadoIcon(paths) {
-  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-}
-
-const FIADO_ICONS = {
-  cobrar: fiadoIcon(`<path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 8H4c0-1.5 2-3 2-8"/><path d="M10 20a2 2 0 0 0 4 0"/>`),
-  abater: fiadoIcon(`<circle cx="12" cy="12" r="8"/><path d="M8 12h8"/>`),
-  venda: fiadoIcon(`<path d="M12 5v14M5 12h14"/>`),
-  clientes: fiadoIcon(`<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2"/><path d="M16.2 14.7a4.5 4.5 0 0 1 4.3 4.3"/>`),
-  wa: fiadoIcon(`<path d="M7.5 18.5 8.4 16A6.5 6.5 0 1 1 10.2 17.6L7.5 18.5z"/>`),
-  edit: fiadoIcon(`<path d="M4 20h4L18 10l-4-4L4 16v4z"/><path d="M12.5 7.5l4 4"/>`),
-  trash: fiadoIcon(`<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 13h6l1-13"/>`)
-};
-
-function fiadoCollectMessage(entry) {
-  const lines = [
-    `Olá ${entry.clientName}, tudo bem?`,
-    "Passando para lembrar do seu fiado na LB jewelry.",
-    `Produto: ${entry.productName}`,
-    `Saldo em aberto: ${money(entry.balance)}`
-  ];
-  if (entry.nextDueDate) lines.push(`Vencimento: ${formatDate(entry.nextDueDate)}`);
-  if (entry.installmentAmount) lines.push(`Parcela: ${money(entry.installmentAmount)}`);
-  lines.push("Podemos combinar o pagamento?");
-  return lines.join("\n");
-}
-
-function renderWhatsAppButton(entry, extraClass = "") {
-  const href = whatsAppLink(entry.clientPhone, fiadoCollectMessage(entry));
-  if (!href) return "";
-  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn ${extraClass}">WhatsApp</a>`;
-}
-
-function isDueSoon(entry) {
-  if (!entry.nextDueDate || entry.status === "paid" || entry.status === "overdue") return false;
-  const due = new Date(`${entry.nextDueDate}T12:00:00`);
-  const limit = new Date();
-  limit.setDate(limit.getDate() + 7);
-  return due <= limit;
-}
-
-function getCollectionAlerts() {
-  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
-  return {
-    overdue: openItems.filter((item) => item.status === "overdue"),
-    dueSoon: openItems.filter(isDueSoon)
-  };
-}
-
-function renderAlertItem(entry, tone) {
-  const client = resolveFiadoClient(entry);
-  const entryForContact = { ...entry, clientName: client.name, clientPhone: client.phone };
-  return `
-    <li class="fiado-alert-item is-${tone}">
-      <div class="fiado-alert-copy">
-        <strong>${text(client.name)}</strong>
-        <span>${text(entry.productName)}</span>
-        <span class="fiado-alert-balance">Saldo ${money(entry.balance)} · Venc. ${formatDate(entry.nextDueDate)}</span>
-      </div>
-      <div class="fiado-alert-actions">
-        ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar</button>` : ""}
-        ${renderWhatsAppButton(entryForContact, "whatsapp-btn--compact")}
-      </div>
-    </li>`;
-}
-
-function renderFiadoAlerts() {
-  const container = document.getElementById("fiado-alerts");
-  if (!container) return;
-  const { overdue, dueSoon } = getCollectionAlerts();
-
-  if (!overdue.length && !dueSoon.length) {
-    container.innerHTML = `<p class="fiado-alert fiado-alert--ok">Nenhuma cobrança urgente no momento.</p>`;
-    return;
-  }
-
-  container.innerHTML = [
-    overdue.length ? `
-      <section class="fiado-alert fiado-alert--overdue">
-        <header>Cobrar agora · ${overdue.length} vencido${overdue.length === 1 ? "" : "s"}</header>
-        <ul class="fiado-alert-list">${overdue.map((entry) => renderAlertItem(entry, "overdue")).join("")}</ul>
-      </section>` : "",
-    dueSoon.length ? `
-      <section class="fiado-alert fiado-alert--due-soon">
-        <header>Vence em até 7 dias · ${dueSoon.length}</header>
-        <ul class="fiado-alert-list">${dueSoon.map((entry) => renderAlertItem(entry, "due-soon")).join("")}</ul>
-      </section>` : ""
-  ].join("");
-}
-
-function openClientById(clientId) {
-  if (!clientId) return;
-  openClient(catalog.clients.find((item) => item.id === clientId));
-}
-
-function renderFiadoPayments(payments, fiadoId) {
-  if (!payments?.length) return "";
-  const items = [...payments].reverse().map((pay) => `
-    <li class="fiado-payment-item">
-      <div class="fiado-payment-item-main">
-        <span>${formatDate(pay.paidAt)}</span>
-        <strong>${money(pay.amount)}</strong>
-        ${pay.note ? `<em>${text(pay.note)}</em>` : ""}
-      </div>
-      <div class="fiado-payment-item-actions">
-        <button type="button" data-edit-payment="${text(pay.id)}" data-fiado-id="${text(fiadoId)}">Editar</button>
-        <button type="button" data-delete-payment="${text(pay.id)}" data-fiado-id="${text(fiadoId)}">Excluir</button>
-      </div>
-    </li>
-  `).join("");
-  return `
-    <details class="fiado-payments"${payments.length <= 2 ? " open" : ""}>
-      <summary>Abatimentos (${payments.length})</summary>
-      <ul>${items}</ul>
-    </details>`;
-}
-
-function resolveFiadoClient(entry) {
-  const client = catalog.clients.find((item) => item.id === entry.clientId);
-  return {
-    name: client?.name || entry.clientName,
-    phone: client?.phone || entry.clientPhone
-  };
-}
-
-function renderFiadoCard(entry) {
-  const payments = entry.payments || [];
-  const client = resolveFiadoClient(entry);
-  const entryForContact = { ...entry, clientName: client.name, clientPhone: client.phone };
-  return `
-    <article class="item-card fiado-card is-${text(entry.status)}">
-      <div class="fiado-card-main">
-        <header class="fiado-card-head">
-          <span class="fiado-badge is-${text(entry.status)}">${fiadoStatusLabel(entry.status)}</span>
-          ${entry.createdAt ? `<time class="fiado-card-date">${formatShortDate(entry.createdAt)}</time>` : ""}
-        </header>
-        <div class="fiado-card-info">
-          <div class="fiado-card-block">
-            <span class="fiado-card-label">Cliente</span>
-            <strong>${text(client.name)}</strong>
-            ${client.phone ? `<span class="fiado-card-sub">${text(client.phone)}</span>` : ""}
-          </div>
-          <div class="fiado-card-block">
-            <span class="fiado-card-label">Produto</span>
-            <p>${text(entry.productName)}</p>
-            <span class="fiado-card-sub">${entry.quantity} un. · Total ${money(entry.total)}${entry.unitCost ? ` · Custo ${money(entry.unitCost * (entry.quantity || 1))}` : ""}${entry.paymentMethod ? ` · ${text(entry.paymentMethod)}` : ""}</span>
-          </div>
-        </div>
-        <dl class="fiado-financials">
-          <div>
-            <dt>Pago</dt>
-            <dd>${money(entry.paid)}</dd>
-          </div>
-          <div>
-            <dt>Saldo</dt>
-            <dd class="is-balance">${money(entry.balance)}</dd>
-          </div>
-          <div>
-            <dt>Próximo venc.</dt>
-            <dd>${formatDate(entry.nextDueDate)}</dd>
-          </div>
-          ${entry.installmentAmount ? `
-          <div>
-            <dt>Parcela</dt>
-            <dd>${money(entry.installmentAmount)}</dd>
-          </div>` : ""}
-        </dl>
-        ${entry.notes ? `<p class="fiado-notes">${text(entry.notes)}</p>` : ""}
-        ${renderFiadoPayments(payments, entry.id)}
-      </div>
-      <div class="fiado-actions">
-        <button type="button" data-edit-fiado="${text(entry.id)}">Editar fiado</button>
-        ${entry.clientId ? `<button type="button" data-edit-client="${text(entry.clientId)}">Editar cliente</button>` : ""}
-        ${entry.status !== "paid" ? renderWhatsAppButton(entryForContact) : ""}
-        ${entry.status !== "paid" ? `<button type="button" data-pay-fiado="${text(entry.id)}" class="primary">Abatimento</button>` : ""}
-      </div>
-    </article>`;
-}
-
-function isSalesListRow(sale) {
-  return !sale.type || sale.type === "cash" || sale.type === "fiado" || sale.type === "fiado_payment";
-}
-
-function saleRevenueAmount(sale) {
-  if (sale.type === "fiado") return Number(sale.paidAtSale || 0);
-  return Number(sale.total || 0);
-}
-
-function resolveSaleClient(sale) {
-  if (!sale.clientId) return sale.clientName || "";
-  const client = catalog.clients.find((item) => item.id === sale.clientId);
-  return client?.name || sale.clientName || "";
-}
-
-function saleLabel(sale) {
-  if (sale.type === "fiado") return "Fiado";
-  if (sale.type === "fiado_payment") return "Abatimento";
-  return "À vista";
-}
-
-function saleWhen(iso) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function text(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function matchesQuery(item, query) {
-  if (!query) return true;
-  const haystack = `${item.name} ${item.category} ${item.collection || ""} ${item.id}`.toLowerCase();
-  return haystack.includes(query);
-}
-
-function refreshSoldIndex() {
-  soldProductIds = new Set(
-    (catalog.sales || []).map((sale) => sale.productId).filter(Boolean)
-  );
-}
-
-function isSoldOut(item) {
-  return Number(item.stock) <= 0 && soldProductIds.has(item.id);
-}
-
-function filterItems(query, { category = "all", lowStock = false, homeOnly = false, out = false, promoOnly = false, soldOnly = false } = {}) {
-  return catalog.products.filter((item) => {
-    if (category !== "all" && item.categorySlug !== category) return false;
-    if (lowStock && (item.stock ?? 0) > 2) return false;
-    if (out && (item.stock ?? 0) > 0) return false;
-    if (homeOnly && item.showOnHome === false) return false;
-    if (promoOnly && !isPromoProduct(item)) return false;
-    if (soldOnly && !isSoldOut(item)) return false;
-    return matchesQuery(item, query);
-  });
-}
-
-function groupByCategory(items) {
-  return CATEGORIES
-    .map((cat) => ({
-      ...cat,
-      items: items.filter((item) => item.categorySlug === cat.slug)
-    }))
-    .filter((group) => group.items.length);
-}
-
-function renderProductFilters() {
-  const node = document.getElementById("product-filters");
-  if (!node) return;
-  const state = listFilter.products;
-  const available = stockPool("available");
-  const sold = stockPool("sold");
-  const pool = state.view === "sold" ? sold : available;
-  const promo = pool.filter((item) => isPromoProduct(item)).length;
-  const home = pool.filter((item) => item.showOnHome !== false).length;
-  node.innerHTML = `
-    <button type="button" data-view="available" class="${state.view !== "sold" ? "is-active" : ""}">
-      Disponíveis <span>${available.length}</span>
-    </button>
-    <button type="button" data-view="sold" class="${state.view === "sold" ? "is-active" : ""}">
-      Vendidos <span>${sold.length}</span>
-    </button>
-    <button type="button" data-cat="all" class="${state.category === "all" ? "is-active" : ""}">
-      Todas <span>${pool.length}</span>
-    </button>
-    ${CATEGORIES.map((cat) => {
-      const count = pool.filter((item) => item.categorySlug === cat.slug).length;
-      if (!count) return "";
-      return `
-        <button type="button" data-cat="${cat.slug}" class="${state.category === cat.slug ? "is-active" : ""}">
-          ${cat.label} <span>${count}</span>
-        </button>`;
-    }).join("")}
-    <button type="button" data-promo class="filter-chip--promo ${state.promoOnly ? "is-active" : ""}">
-      Promoção <span>${promo}</span>
-    </button>
-    <button type="button" data-home class="${state.homeOnly ? "is-active" : ""}">
-      Na home <span>${home}</span>
-    </button>`;
-}
-
-function bindFilterBar(containerId, key, redraw) {
-  document.getElementById(containerId).addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    if (button.dataset.view) {
-      listFilter[key].view = button.dataset.view;
-    } else if ("home" in button.dataset) {
-      listFilter[key].homeOnly = !listFilter[key].homeOnly;
-    } else if ("promo" in button.dataset) {
-      listFilter[key].promoOnly = !listFilter[key].promoOnly;
-    } else if (button.dataset.cat) {
-      listFilter[key].category = button.dataset.cat;
-    }
-    redraw();
-  });
-}
-
-function last12Months() {
-  const labels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-  const now = new Date();
-  const months = [];
-  for (let offset = 11; offset >= 0; offset -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    months.push({
-      key,
-      label: `${labels[date.getMonth()]}/${String(date.getFullYear()).slice(2)}`,
-      total: 0,
-      count: 0
-    });
-  }
-  return months;
-}
-
-function renderMonthChart(sales) {
-  const months = last12Months();
-  sales.forEach((sale) => {
-    const key = (sale.createdAt || "").slice(0, 7);
-    const bucket = months.find((item) => item.key === key);
-    if (bucket) {
-      bucket.total += Number(sale.total) || 0;
-      bucket.count += 1;
-    }
-  });
-  const max = Math.max(...months.map((item) => item.total), 1);
-  document.getElementById("chart-months").innerHTML = `<div class="month-chart">${months.map((item) => {
-    const [month, year] = item.label.split("/");
-    const height = Math.max(item.total ? 8 : 0, Math.round((item.total / max) * 100));
-    return `
-      <div class="month-col" title="${item.total ? money(item.total) : "Sem vendas"}">
-        <div class="month-track"><div class="month-fill" style="height:${height}%"></div></div>
-        <span class="month-label">${month}<br>${year}</span>
-      </div>`;
-  }).join("")}</div>`;
-}
-
-function renderCategoryChart(sales) {
-  const totals = {};
-  sales.forEach((sale) => {
-    const product = catalog.products.find((item) => item.id === sale.productId);
-    const category = product?.category || "Outros";
-    totals[category] = (totals[category] || 0) + (Number(sale.total) || 0);
-  });
-  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  const max = Math.max(...rows.map((item) => item[1]), 1);
-  document.getElementById("chart-categories").innerHTML = rows.length
-    ? rows.map(([label, total]) => `
-        <div class="cat-row">
-          <span>${label}</span>
-          <div class="cat-track"><div class="cat-fill" style="width:${(total / max) * 100}%"></div></div>
-          <strong>${money(total)}</strong>
-        </div>
-      `).join("")
-    : "<p class='panel-hint'>Registre vendas para ver o gráfico.</p>";
-}
-
-function renderPhotoPreviews() {
-  const box = document.getElementById("product-previews");
-  if (!productImages.length) {
-    box.innerHTML = "<p class='panel-hint'>Nenhuma foto ainda. A primeira será a da home.</p>";
-    productForm.elements.image.value = "";
-    return;
-  }
-  box.innerHTML = productImages.map((src, index) => `
-    <figure class="photo-thumb${index === 0 ? " is-cover" : ""}">
-      <img src="${src}" alt="">
-      <figcaption>${index === 0 ? "Home" : `Foto ${index + 1}`}</figcaption>
-      <button type="button" data-remove-photo="${index}">Remover</button>
-    </figure>
-  `).join("");
-  productForm.elements.image.value = productImages[0];
-}
-
-function productMeta(item) {
-  const price = hasSalePrice(item)
-    ? `<span class="promo-price">${money(item.priceList)} → ${money(item.priceMax)}</span>`
-    : `${money(item.priceMin)}${item.priceMin !== item.priceMax ? ` — ${money(item.priceMax)}` : ""}`;
-  const promoTag = isPromoProduct(item) ? ' · <span class="promo-tag">Promoção</span>' : "";
-  const inactive = item.active === false ? " · Inativo" : "";
-  const cost = Number(item.cost) > 0 ? ` · Custo ${money(item.cost)} · Margem ${money((item.priceMin || 0) - item.cost)}` : "";
-  if (isSoldOut(item)) {
-    return `${price}${cost} · <span class="sold-tag">Vendido</span>${promoTag}${inactive}`;
-  }
-  const stockClass = item.stock <= 2 ? "stock-low" : "";
-  return `${price}${cost} · <span class="${stockClass}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}${promoTag}${inactive}`;
-}
-
-function promoDiscountLabel(item) {
-  if (!hasSalePrice(item)) return "";
-  const pct = Math.round((1 - item.priceMax / item.priceList) * 100);
-  return pct > 0 ? ` (−${pct}%)` : "";
-}
-
-function renderPromoProducts() {
-  const list = document.getElementById("promo-product-list");
-  const count = document.getElementById("promo-count");
-  if (!list) return;
-
-  const promos = catalog.products.filter((item) => isPromoProduct(item) && Number(item.stock) > 0);
-  if (count) {
-    count.textContent = promos.length
-      ? `${promos.length} peça${promos.length === 1 ? "" : "s"}`
-      : "Nenhuma";
-  }
-
-  if (!promos.length) {
-    list.innerHTML = "<p class='panel-hint promo-empty'>Nenhum item em promoção no momento.</p>";
-    return;
-  }
-
-  list.innerHTML = promos.map((item) => `
-    <article class="item-card item-card--promo">
-      <img class="thumb" src="${text(item.image)}" alt="">
-      <div class="item-card-body">
-        <h4>${text(item.name)}</h4>
-        <p>
-          ${hasSalePrice(item)
-            ? `<span class="promo-price">${money(item.priceList)} → ${money(item.priceMax)}${promoDiscountLabel(item)}</span>`
-            : `<span class="promo-price">${money(item.priceMax)}</span>`}
-          · ${text(item.category || "")}
-          ${item.badge === "sale" ? ' · <span class="promo-tag">Selo Sale</span>' : ""}
-        </p>
-      </div>
-      <div class="item-card-actions">
-        <button type="button" data-edit="${text(item.id)}">Editar</button>
-      </div>
-    </article>
-  `).join("");
-}
-
-function renderProducts() {
-  const state = listFilter.products;
-  const query = productSearch.value.trim().toLowerCase();
-  const rows = stockPool(state.view)
-    .filter((item) => state.category === "all" || item.categorySlug === state.category)
-    .filter((item) => !state.promoOnly || isPromoProduct(item))
-    .filter((item) => !state.homeOnly || item.showOnHome !== false)
-    .filter((item) => matchesQuery(item, query))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt"));
-  renderProductFilters();
-  const meta = document.getElementById("product-result-meta");
-  meta.textContent = stockResultLabel(rows.length, state.view);
-
-  if (!rows.length) {
-    productList.innerHTML = "<p class='panel-hint'>Nenhum produto encontrado neste filtro.</p>";
-    return;
-  }
-
-  const groups = groupByCategory(rows);
-  productList.innerHTML = groups.map((group) => `
-    <section class="category-block">
-      <header class="category-block-head">
-        <h3>${group.label}</h3>
-        <span>${group.items.length} ${group.items.length === 1 ? "peça" : "peças"}</span>
-      </header>
-      <div class="item-list">
-        ${group.items.map((item) => `
-          <article class="item-card${isPromoProduct(item) ? " item-card--promo" : ""}${isSoldOut(item) ? " item-card--sold" : ""}">
-            <img class="thumb" src="${text(item.image)}" alt="">
-            <div class="item-card-body">
-              <h4>${text(item.name)}</h4>
-              <p>${productMeta(item)}</p>
-            </div>
-            <div class="item-card-actions">
-              <button type="button" data-edit="${text(item.id)}">Editar</button>
-              <button type="button" data-delete="${text(item.id)}">Excluir</button>
-            </div>
-          </article>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
-}
-
-function fillSaleProducts(selectedId) {
-  const select = document.querySelector("#sale-form [name='productId']");
-  const category = document.getElementById("sale-category").value || "all";
-  const rows = filterItems("", { category });
-  const groups = groupByCategory(rows);
-  select.innerHTML = groups.map((group) => `
-    <optgroup label="${group.label}">
-      ${group.items.map((item) => `
-        <option value="${text(item.id)}" data-price="${item.priceMin}" ${item.id === selectedId ? "selected" : ""}>
-          ${text(item.name)} (${item.stock} un.)
-        </option>
-      `).join("")}
-    </optgroup>
-  `).join("") || `<option value="">Nenhuma peça nesta categoria</option>`;
-
-  const chosen = select.selectedOptions[0];
-  if (chosen?.dataset.price) {
-    document.querySelector("#sale-form [name='unitPrice']").value = chosen.dataset.price;
-  }
-}
-
-function bannerMedia(banner) {
-  if (banner.type === "video" && banner.video) {
-    return `<video src="${text(banner.video)}" muted playsinline></video>`;
-  }
-  if (banner.image) {
-    return `<img src="${text(banner.image)}" alt="">`;
-  }
-  return `<div class="banner-placeholder">Sem mídia</div>`;
-}
-
-function renderPromoPopupSettings() {
-  const popup = catalog.promoPopup || {};
-  const enabled = document.getElementById("promo-enabled");
-  const coupon = document.getElementById("promo-coupon-code");
-  const seller = document.getElementById("promo-seller-phone");
-  const headline = document.getElementById("promo-headline");
-  const instruction = document.getElementById("promo-instruction");
-  const imageHidden = document.getElementById("promo-image");
-  const imageUrl = document.getElementById("promo-image-url");
-  const preview = document.getElementById("promo-image-preview");
-  if (!enabled) return;
-  enabled.checked = popup.enabled !== false;
-  coupon.value = popup.couponCode || "";
-  seller.value = popup.sellerPhone || "";
-  headline.value = popup.headline || "";
-  instruction.value = popup.instruction || "";
-  imageHidden.value = popup.image || "";
-  imageUrl.value = popup.image || "";
-  if (preview) {
-    preview.src = popup.image || "";
-    preview.hidden = !popup.image;
-  }
-}
-
-function collectPromoPopup() {
-  return {
-    enabled: document.getElementById("promo-enabled").checked,
-    couponCode: document.getElementById("promo-coupon-code").value.trim(),
-    sellerPhone: document.getElementById("promo-seller-phone").value.trim(),
-    headline: document.getElementById("promo-headline").value.trim(),
-    instruction: document.getElementById("promo-instruction").value.trim(),
-    image: document.getElementById("promo-image-url").value.trim()
-      || document.getElementById("promo-image").value.trim()
-  };
-}
-
-function formatPhoneDisplay(phone) {
-  const digits = phoneDigits(phone);
-  if (digits.length === 11) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  }
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  }
-  return phone || "—";
-}
-
-function prospectInitials(name) {
-  return String(name || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0] || "")
-    .join("")
-    .toUpperCase() || "?";
-}
-
-function renderProspects() {
-  const list = document.getElementById("prospect-list");
-  const count = document.getElementById("prospects-count");
-  if (!list) return;
-  const rows = catalog.prospects || [];
-  if (count) {
-    count.textContent = String(rows.length);
-  }
-  if (!rows.length) {
-    list.innerHTML = `
-      <div class="prospects-empty">
-        <strong>Nenhum prospect ainda</strong>
-        <p>Os cadastros do pop-up de cupom aparecem aqui.</p>
-      </div>`;
-    return;
-  }
-  list.innerHTML = `
-    <div class="prospect-table-head" aria-hidden="true">
-      <span>Cliente</span>
-      <span>WhatsApp</span>
-      <span>Cupom</span>
-      <span>Data</span>
-      <span></span>
-    </div>
-    ${rows.map((item) => {
-      const waHref = whatsAppLink(item.phone, `Olá ${item.name}, vi seu cadastro no cupom ${item.couponCode} da LB jewelry.`);
-      return `
-        <article class="prospect-row">
-          <div class="prospect-identity">
-            <span class="prospect-avatar">${text(prospectInitials(item.name))}</span>
-            <div class="prospect-identity-text">
-              <h4>${text(item.name)}</h4>
-              <p class="prospect-phone-mobile">${text(formatPhoneDisplay(item.phone))}</p>
-            </div>
-          </div>
-          <p class="prospect-phone">${text(formatPhoneDisplay(item.phone))}</p>
-          <p><span class="prospect-coupon">${text(item.couponCode)}</span></p>
-          <p class="prospect-date">${formatShortDate(item.createdAt) || formatDate(item.createdAt)}</p>
-          <div class="prospect-actions">
-            ${waHref ? `<a href="${waHref}" target="_blank" rel="noopener noreferrer" class="whatsapp-btn whatsapp-btn--compact">WhatsApp</a>` : ""}
-            <button type="button" class="prospect-delete" data-delete-prospect="${text(item.id)}">Excluir</button>
-          </div>
-        </article>`;
-    }).join("")}`;
-}
-
-function renderBanners() {
-  bannerList.innerHTML = catalog.banners.map((banner, index) => `
-    <article class="banner-card" data-index="${index}">
-      <div class="banner-preview">${bannerMedia(banner)}</div>
-      <div>
-        <input type="hidden" data-field="id" value="${text(banner.id || "")}">
-        <label>Tipo
-          <select data-field="type">
-            <option value="image" ${banner.type !== "video" ? "selected" : ""}>Imagem</option>
-            <option value="video" ${banner.type === "video" ? "selected" : ""}>Vídeo</option>
-          </select>
-        </label>
-        <label>Título<input type="text" data-field="title" value="${text(banner.title || "")}"></label>
-        <input type="hidden" data-field="image" value="${text(banner.image || "")}">
-        <input type="hidden" data-field="video" value="${text(banner.video || "")}">
-        <label>Link do arquivo (opcional)
-          <input type="text" data-field="media-url" value="${text(banner.type === "video" ? banner.video : banner.image)}" placeholder="assets/uploads/arquivo.mp4 ou https://...">
-        </label>
-        <label class="file-label">Trocar arquivo
-          <input type="file" data-upload accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
-        </label>
-        <p class="panel-hint banner-file-hint">Vídeos: até 50 MB. Se o vídeo atual já funciona na loja, não precisa reenviar — só clique em Salvar banners.</p>
-      </div>
-      <div class="row-actions">
-        <button type="button" data-move="up">Subir</button>
-        <button type="button" data-move="down">Descer</button>
-        <button type="button" data-remove>Remover</button>
-      </div>
-    </article>
-  `).join("");
-}
-
-function stockPool(view) {
-  return catalog.products.filter((item) => (
-    view === "sold" ? Number(item.stock) <= 0 : Number(item.stock) > 0
-  ));
-}
-
-function renderStockFilters() {
-  const node = document.getElementById("stock-filters");
-  if (!node) return;
-  const state = listFilter.stock;
-  const available = stockPool("available");
-  const sold = stockPool("sold");
-  const pool = state.view === "sold" ? sold : available;
-  node.innerHTML = `
-    <button type="button" data-view="available" class="${state.view !== "sold" ? "is-active" : ""}">
-      Disponíveis <span>${available.length}</span>
-    </button>
-    <button type="button" data-view="sold" class="${state.view === "sold" ? "is-active" : ""}">
-      Vendidos <span>${sold.length}</span>
-    </button>
-    <button type="button" data-cat="all" class="${state.category === "all" ? "is-active" : ""}">
-      Todas <span>${pool.length}</span>
-    </button>
-    ${CATEGORIES.map((cat) => {
-      const count = pool.filter((item) => item.categorySlug === cat.slug).length;
-      if (!count) return "";
-      return `
-        <button type="button" data-cat="${cat.slug}" class="${state.category === cat.slug ? "is-active" : ""}">
-          ${cat.label} <span>${count}</span>
-        </button>`;
-    }).join("")}`;
-}
-
-function bindStockFilters() {
-  document.getElementById("stock-filters").addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    if (button.dataset.view) listFilter.stock.view = button.dataset.view;
-    else if (button.dataset.cat) listFilter.stock.category = button.dataset.cat;
-    renderStock();
-  });
-}
-
-function stockResultLabel(count, view) {
-  if (!count) return "";
-  if (view === "sold") return count === 1 ? "1 peça vendida" : `${count} peças vendidas`;
-  return count === 1 ? "1 peça disponível" : `${count} peças disponíveis`;
-}
-
-function renderStock() {
-  const available = stockPool("available");
-  const totalUnits = available.reduce((sum, item) => sum + (item.stock || 0), 0);
-  const stockCost = available.reduce((sum, item) => sum + (Number(item.cost) || 0) * (item.stock || 0), 0);
-  const stockSale = available.reduce((sum, item) => sum + (Number(item.priceMin) || 0) * (item.stock || 0), 0);
-  document.getElementById("stock-summary").innerHTML = `
-    <div class="stat-card"><span>Disponíveis</span><strong>${available.length}</strong></div>
-    <div class="stat-card"><span>Unidades</span><strong>${totalUnits}</strong></div>
-    <div class="stat-card"><span>Custo em estoque</span><strong>${money(stockCost)}</strong></div>
-    <div class="stat-card"><span>Venda potencial</span><strong>${money(stockSale)}</strong></div>
-  `;
-
-  const state = listFilter.stock;
-  const query = stockSearch.value.trim().toLowerCase();
-  const rows = stockPool(state.view)
-    .filter((item) => state.category === "all" || item.categorySlug === state.category)
-    .filter((item) => matchesQuery(item, query))
-    .sort((a, b) => Number(a.stock) - Number(b.stock) || a.name.localeCompare(b.name, "pt"));
-  renderStockFilters();
-  document.getElementById("stock-result-meta").textContent = stockResultLabel(rows.length, state.view);
-
-  if (!rows.length) {
-    document.getElementById("stock-list").innerHTML = "<p class='panel-hint'>Nenhuma peça neste filtro. Ajuste a busca ou a categoria.</p>";
-    return;
-  }
-
-  const groups = groupByCategory(rows);
-  document.getElementById("stock-list").innerHTML = groups.map((group) => `
-    <section class="category-block">
-      <header class="category-block-head">
-        <h3>${group.label}</h3>
-        <span>${group.items.length} ${group.items.length === 1 ? "peça" : "peças"}</span>
-      </header>
-      <div class="item-list">
-        ${group.items.map((item) => `
-          <article class="item-card stock-card">
-            <div class="item-card-body">
-              <h4>${text(item.name)}</h4>
-              <p>
-                ${isSoldOut(item)
-                  ? `<span class="sold-tag">Vendido</span>`
-                  : `<span class="${item.stock <= 2 ? "stock-low" : ""}">${item.stock ?? 0} un.</span> · ${item.showOnHome ? "Na home" : "Fora da home"}`}
-                · Venda ${money(item.priceMin)}
-                · Custo ${money(item.cost || 0)}
-              </p>
-            </div>
-            <button type="button" data-edit-stock="${text(item.id)}">Editar</button>
-            <form class="stock-entry" data-stock="${text(item.id)}">
-              <button type="button" data-step="-1" aria-label="Diminuir">−</button>
-              <input type="number" name="quantity" min="1" step="1" value="1" required>
-              <button type="button" data-step="1" aria-label="Aumentar">+</button>
-              <button type="submit">Repor</button>
-            </form>
-          </article>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
-
-  if (stockFocusId) {
-    const input = document.querySelector(`form[data-stock="${stockFocusId}"] input[name="quantity"]`);
-    input?.focus();
-    input?.select();
-    stockFocusId = null;
-  }
-}
-
-function saleMatchesPeriod(sale) {
-  const created = new Date(sale.createdAt);
-  if (Number.isNaN(created.getTime())) return false;
-  const now = new Date();
-  if (salesFilter.period === "all") return true;
-  if (salesFilter.period === "month") {
-    return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-  }
-  if (salesFilter.period === "quarter") {
-    const start = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-    return created >= start;
-  }
-  return created.getFullYear() === now.getFullYear();
-}
-
-function filteredSales() {
-  return (catalog.sales || []).filter((sale) => {
-    if (!isSalesListRow(sale)) return false;
-    if (!saleMatchesPeriod(sale)) return false;
-    if (salesFilter.category === "all") return true;
-    const product = catalog.products.find((item) => item.id === sale.productId);
-    return product?.categorySlug === salesFilter.category;
-  });
-}
-
-function renderSalesFilters() {
-  const periods = [
-    { id: "month", label: "Este mês" },
-    { id: "quarter", label: "Trimestre" },
-    { id: "year", label: "Ano" },
-    { id: "all", label: "Tudo" }
-  ];
-  document.getElementById("sales-period-filters").innerHTML = periods.map((item) => `
-    <button type="button" data-period="${item.id}" class="${salesFilter.period === item.id ? "is-active" : ""}">${item.label}</button>
-  `).join("");
-  document.getElementById("sales-category-filters").innerHTML = `
-    <button type="button" data-sale-cat="all" class="${salesFilter.category === "all" ? "is-active" : ""}">Todas</button>
-    ${CATEGORIES.map((cat) => `
-      <button type="button" data-sale-cat="${cat.slug}" class="${salesFilter.category === cat.slug ? "is-active" : ""}">${cat.label}</button>
-    `).join("")}
-  `;
-}
-
-function renderSales() {
-  renderSalesFilters();
-  const rows = filteredSales();
-  const total = rows.reduce((sum, item) => sum + saleRevenueAmount(item), 0);
-  const units = rows.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  const ticket = rows.length ? total / rows.length : 0;
-  const cost = rows.reduce((sum, item) => {
-    if (item.type === "fiado_payment") return sum;
-    return sum + (Number(item.unitCost) || 0) * (item.quantity || 0);
-  }, 0);
-  document.getElementById("sales-summary").innerHTML = `
-    <div class="stat-card"><span>Recebido</span><strong>${money(total)}</strong></div>
-    <div class="stat-card"><span>Custo das peças</span><strong>${money(cost)}</strong></div>
-    <div class="stat-card"><span>Resultado</span><strong>${money(total - cost)}</strong></div>
-    <div class="stat-card"><span>Peças vendidas</span><strong>${units}</strong></div>
-    <div class="stat-card"><span>Ticket médio</span><strong>${money(ticket)}</strong></div>
-  `;
-  const meta = document.getElementById("sales-result-meta");
-  if (meta) {
-    meta.textContent = rows.length
-      ? `${rows.length} venda${rows.length === 1 ? "" : "s"} neste filtro`
-      : "Nenhuma venda neste filtro.";
-  }
-  renderMonthChart(rows);
-  renderCategoryChart(rows);
-
-  fillSaleProducts(lastSaleProductId);
-  document.getElementById("sales-list").innerHTML = rows.length ? `
-    <table class="sales-table">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Peça</th>
-          <th>Cliente</th>
-          <th>Qtd</th>
-          <th>Pagamento</th>
-          <th>Valor</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map((item) => {
-          const clientName = resolveSaleClient(item);
-          const amount = saleRevenueAmount(item);
-          const qty = item.quantity || 0;
-          const costLine = item.unitCost && item.type !== "fiado_payment"
-            ? `Custo ${money(item.unitCost * (qty || 1))} · Margem ${money(amount - item.unitCost * (qty || 1))}`
-            : "";
-          const fiadoLine = item.type === "fiado" && Number(item.total || 0) > amount
-            ? `Total ${money(item.total)} · Entrada ${money(amount)}`
-            : "";
-          return `
-          <tr>
-            <td data-label="Data">${saleWhen(item.createdAt)}</td>
-            <td data-label="Peça">
-              <span class="sale-badge">${saleLabel(item)}</span>
-              <strong>${text(item.productName || "Recebimento")}</strong>
-              ${fiadoLine ? `<small>${fiadoLine}</small>` : ""}
-              ${costLine ? `<small>${costLine}</small>` : ""}
-              ${item.notes ? `<small>${text(item.notes)}</small>` : ""}
-            </td>
-            <td data-label="Cliente">${clientName ? text(clientName) : "—"}</td>
-            <td data-label="Qtd">${qty || "—"}</td>
-            <td data-label="Pagamento">${item.paymentMethod ? text(item.paymentMethod) : "—"}</td>
-            <td data-label="Valor" class="sales-amount">${money(amount)}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>` : "<p class='panel-hint'>Nenhuma venda neste filtro.</p>";
-}
-
-function fillFiadoProducts(selectedId) {
-  const select = document.querySelector("#fiado-form [name='productId']");
-  const category = document.getElementById("fiado-category").value || "all";
-  const rows = filterItems("", { category });
-  const groups = groupByCategory(rows);
-  select.innerHTML = groups.map((group) => `
-    <optgroup label="${group.label}">
-      ${group.items.map((item) => `
-        <option value="${text(item.id)}" data-price="${item.priceMin}" ${item.id === selectedId ? "selected" : ""}>
-          ${text(item.name)} (${item.stock} un.)
-        </option>
-      `).join("")}
-    </optgroup>
-  `).join("") || `<option value="">Nenhuma peça nesta categoria</option>`;
-
-  const chosen = select.selectedOptions[0];
-  if (chosen?.dataset.price) {
-    document.querySelector("#fiado-form [name='unitPrice']").value = chosen.dataset.price;
-  }
-}
-
-function fillClientSelects() {
-  const options = (catalog.clients || [])
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .map((client) => `<option value="${text(client.id)}">${text(client.name)} · ${text(client.phone)}</option>`)
-    .join("");
-  const fiadoSelect = document.querySelector("#fiado-form [name='clientId']");
-  if (fiadoSelect) {
-    fiadoSelect.innerHTML = options || `<option value="">Cadastre um cliente</option>`;
-  }
-}
-
-function clientPhoneLabel(phone) {
-  const digits = phoneDigits(phone);
-  if (digits.length < 10) return "";
-  return String(phone || "").trim();
-}
-
-function clientLedger(clientId) {
-  const entries = (catalog.fiado || []).filter((item) => item.clientId === clientId);
-  const open = entries.filter((item) => item.status !== "paid");
-  const balance = open.reduce((sum, item) => sum + Number(item.balance || 0), 0);
-  const nextDue = open
-    .map((item) => item.nextDueDate)
-    .filter(Boolean)
-    .sort()[0] || "";
-  const overdue = open.some((item) => item.status === "overdue");
-  return { openCount: open.length, balance, nextDue, overdue };
-}
-
-function filteredClients() {
-  const query = clientSearchQuery.trim().toLowerCase();
-  return (catalog.clients || [])
-    .filter((client) => {
-      const ledger = clientLedger(client.id);
-      if (clientListFilter === "open" && ledger.balance <= 0) return false;
-      if (clientListFilter === "clear" && ledger.balance > 0) return false;
-      if (!query) return true;
-      return `${client.name} ${client.phone} ${client.address || ""} ${client.notes || ""}`.toLowerCase().includes(query);
-    })
-    .sort((a, b) => {
-      const left = clientLedger(a.id);
-      const right = clientLedger(b.id);
-      if (right.balance !== left.balance) return right.balance - left.balance;
-      if (left.nextDue && right.nextDue && left.nextDue !== right.nextDue) {
-        return left.nextDue.localeCompare(right.nextDue);
-      }
-      return a.name.localeCompare(b.name, "pt-BR");
-    });
-}
-
-function filteredFiado() {
-  return (catalog.fiado || []).filter((entry) => {
-    if (fiadoFilter.status === "all") return true;
-    return entry.status === fiadoFilter.status;
-  });
-}
-
-function fiadoStatusLabel(status) {
-  if (status === "paid") return "Quitado";
-  if (status === "overdue") return "Vencido";
-  return "Em aberto";
-}
-
-function renderClientFilters() {
-  const box = document.getElementById("client-filters");
-  if (!box) return;
-  const openCount = (catalog.clients || []).filter((client) => clientLedger(client.id).balance > 0).length;
-  const filters = [
-    { id: "all", label: "Todos" },
-    { id: "open", label: `Com saldo (${openCount})` },
-    { id: "clear", label: "Sem saldo" }
-  ];
-  box.innerHTML = filters.map((item) => `
-    <button type="button" data-client-filter="${item.id}" class="${clientListFilter === item.id ? "is-active" : ""}">${item.label}</button>
-  `).join("");
-}
-
-function renderClients() {
-  renderClientFilters();
-  const rows = filteredClients();
-  const list = document.getElementById("client-list");
-  if (!list) return;
-  if (!rows.length) {
-    list.innerHTML = "<p class='panel-hint'>Nenhum cliente neste filtro.</p>";
-    return;
-  }
-
-  list.innerHTML = rows.map((client) => {
-    const ledger = clientLedger(client.id);
-    const phone = clientPhoneLabel(client.phone);
-    const note = String(client.notes || "").trim();
-    const bits = [];
-    if (phone) {
-      bits.push(`<a class="client-phone" href="${text(whatsAppLink(phone, `Olá ${client.name}, tudo bem?`))}" target="_blank" rel="noopener noreferrer">${text(phone)}</a>`);
-    }
-    if (ledger.nextDue) bits.push(`Vence ${formatDate(ledger.nextDue)}`);
-    if (ledger.openCount) bits.push(`${ledger.openCount} fiado${ledger.openCount === 1 ? "" : "s"}`);
-    return `
-      <article class="client-row${ledger.overdue ? " is-overdue" : ledger.balance > 0 ? " is-open" : ""}">
-        <div class="client-row-top">
-          <strong>${text(client.name)}</strong>
-          <span class="${ledger.balance > 0 ? "client-balance" : "client-clear"}">${ledger.balance > 0 ? money(ledger.balance) : "Quitado"}</span>
-        </div>
-        ${bits.length ? `<p class="client-row-meta">${bits.join(" · ")}</p>` : ""}
-        <div class="client-row-actions">
-          ${phone ? `<a class="icon-btn icon-btn--wa" href="${text(whatsAppLink(phone, ledger.balance > 0 ? `Olá ${client.name}, tudo bem?\nSeu saldo em aberto na LB jewelry é ${money(ledger.balance)}.` : `Olá ${client.name}, tudo bem?`))}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp de ${text(client.name)}">${FIADO_ICONS.wa}</a>` : ""}
-          <button type="button" class="icon-btn" data-edit-client="${text(client.id)}" aria-label="Editar ${text(client.name)}">${FIADO_ICONS.edit}</button>
-          <button type="button" class="icon-btn icon-btn--danger" data-delete-client="${text(client.id)}" aria-label="Excluir ${text(client.name)}">${FIADO_ICONS.trash}</button>
-        </div>
-        ${note ? `<details class="client-notes"><summary>Anotações</summary><p>${text(note)}</p></details>` : ""}
-      </article>`;
-  }).join("");
-}
-
-function fiadoMatchesQuery(entry) {
-  const query = fiadoSearchQuery.trim().toLowerCase();
-  if (!query) return true;
-  const client = resolveFiadoClient(entry);
-  return `${client.name} ${client.phone || ""} ${entry.productName || ""}`.toLowerCase().includes(query);
-}
-
-function fiadoMonthKey() {
-  return new Date().toISOString().slice(0, 7);
-}
-
-function fiadoMonthPayments() {
-  const monthKey = fiadoMonthKey();
-  const rows = [];
-  (catalog.fiado || []).forEach((entry) => {
-    (entry.payments || []).forEach((pay) => {
-      if ((pay.paidAt || "").slice(0, 7) === monthKey) rows.push({ entry, pay });
-    });
-  });
-  return rows.sort((a, b) => String(b.pay.paidAt || "").localeCompare(String(a.pay.paidAt || "")));
-}
-
-function fiadoQueueMeta(entry) {
-  const bits = [entry.productName];
-  if (entry.status === "overdue" && entry.nextDueDate) bits.push(`venceu ${formatDate(entry.nextDueDate)}`);
-  else if (entry.nextDueDate) bits.push(`vence ${formatDate(entry.nextDueDate)}`);
-  else bits.push("sem vencimento");
-  return bits.filter(Boolean).join(" · ");
-}
-
-function fiadoQueueActions(entry, mode) {
-  const client = resolveFiadoClient(entry);
-  const contact = { ...entry, clientName: client.name, clientPhone: client.phone };
-  const href = whatsAppLink(contact.clientPhone, fiadoCollectMessage(contact));
-  const wa = href
-    ? `<a class="icon-btn icon-btn--wa" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="Cobrar ${text(client.name)} no WhatsApp">${FIADO_ICONS.wa}</a>`
-    : "";
-  const pay = entry.status !== "paid"
-    ? `<button type="button" class="icon-btn${mode === "abater" ? " icon-btn--pay" : ""}" data-pay-fiado="${text(entry.id)}" aria-label="Abater saldo de ${text(client.name)}">${FIADO_ICONS.abater}</button>`
-    : "";
-  const edit = `<button type="button" class="icon-btn" data-edit-fiado="${text(entry.id)}" aria-label="Editar fiado de ${text(client.name)}">${FIADO_ICONS.edit}</button>`;
-  return `<div class="fiado-queue-actions">${wa}${pay}${edit}</div>`;
-}
-
-function fiadoQueueRow(entry, mode) {
-  const client = resolveFiadoClient(entry);
-  const tone = entry.status === "overdue" ? " is-overdue" : isDueSoon(entry) ? " is-soon" : "";
-  return `
-    <article class="fiado-queue-row${tone}">
-      <div class="fiado-queue-main">
-        <div class="fiado-queue-top">
-          <strong>${text(client.name)}</strong>
-          <span class="fiado-queue-balance">${money(entry.balance)}</span>
-        </div>
-        <p class="fiado-queue-meta">${text(fiadoQueueMeta(entry))}</p>
-      </div>
-      ${fiadoQueueActions(entry, mode)}
-    </article>`;
-}
-
-function renderFiadoDock(overdueCount, openCount, clientCount) {
-  const dock = document.getElementById("fiado-dock");
-  if (!dock) return;
-  const alertCount = overdueCount;
-  const items = [
-    { id: "cobrar", label: "Cobrar", badge: alertCount, hot: alertCount > 0 },
-    { id: "abater", label: "Abater", badge: openCount, hot: false },
-    { id: "venda", label: "Venda", badge: 0, hot: false },
-    { id: "clientes", label: "Clientes", badge: clientCount, hot: false }
-  ];
-  dock.innerHTML = items.map((item) => `
-    <button type="button" data-fiado-view="${item.id}" class="${fiadoView === item.id ? "is-active" : ""}" aria-pressed="${fiadoView === item.id ? "true" : "false"}">
-      ${FIADO_ICONS[item.id]}
-      ${item.badge ? `<span class="dock-badge${item.hot ? " is-hot" : ""}">${item.badge}</span>` : ""}
-      <span>${item.label}</span>
-    </button>
-  `).join("");
-}
-
-function applyFiadoView() {
-  const work = fiadoView === "cobrar" || fiadoView === "abater" || fiadoView === "recebido";
-  const workPanel = document.getElementById("fiado-panel-work");
-  const salePanel = document.getElementById("fiado-panel-venda");
-  const clientPanel = document.getElementById("fiado-panel-clientes");
-  if (workPanel) workPanel.hidden = !work;
-  if (salePanel) salePanel.hidden = fiadoView !== "venda";
-  if (clientPanel) clientPanel.hidden = fiadoView !== "clientes";
-}
-
-function renderFiadoQueue(openItems, overdueItems, dueSoon) {
-  const list = document.getElementById("fiado-list");
-  const meta = document.getElementById("fiado-result-meta");
-  if (!list || !meta) return;
-
-  const open = openItems.filter(fiadoMatchesQuery);
-  const overdue = overdueItems.filter(fiadoMatchesQuery);
-  const soon = dueSoon.filter(fiadoMatchesQuery);
-
-  if (fiadoView === "recebido") {
-    const payments = fiadoMonthPayments().filter(({ entry }) => fiadoMatchesQuery(entry));
-    meta.textContent = payments.length
-      ? `${payments.length} recebimento${payments.length === 1 ? "" : "s"} neste mês`
-      : "Nenhum recebimento neste mês.";
-    list.innerHTML = payments.length
-      ? payments.map(({ entry, pay }) => {
-        const client = resolveFiadoClient(entry);
-        return `
-          <article class="fiado-queue-row">
-            <div class="fiado-queue-main">
-              <div class="fiado-queue-top">
-                <strong>${text(client.name)}</strong>
-                <span class="fiado-queue-balance is-in">${money(pay.amount)}</span>
-              </div>
-              <p class="fiado-queue-meta">${text(entry.productName)} · ${text(formatDate(pay.paidAt))}${pay.note ? ` · ${text(pay.note)}` : ""}</p>
-            </div>
-            <div class="fiado-queue-actions">
-              <button type="button" class="icon-btn" data-edit-fiado="${text(entry.id)}" aria-label="Editar fiado de ${text(client.name)}">${FIADO_ICONS.edit}</button>
-            </div>
-          </article>`;
-      }).join("")
-      : "<p class='panel-hint'>Nenhum abatimento caiu neste mês.</p>";
-    return;
-  }
-
-  if (fiadoView === "abater") {
-    const rows = open.slice().sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
-    meta.textContent = rows.length
-      ? `${rows.length} saldo${rows.length === 1 ? "" : "s"} em aberto`
-      : "Nenhum saldo em aberto.";
-    list.innerHTML = rows.length
-      ? rows.map((entry) => fiadoQueueRow(entry, "abater")).join("")
-      : "<p class='panel-hint'>Nada para abater.</p>";
-    return;
-  }
-
-  const blocks = [];
-  if (overdue.length) {
-    blocks.push(`<p class="fiado-queue-label">Vencidos · ${overdue.length}</p>`);
-    blocks.push(overdue.map((entry) => fiadoQueueRow(entry, "cobrar")).join(""));
-  }
-  if (soon.length) {
-    blocks.push(`<p class="fiado-queue-label">Vence em 7 dias · ${soon.length}</p>`);
-    blocks.push(soon.map((entry) => fiadoQueueRow(entry, "cobrar")).join(""));
-  }
-  const waiting = open.length - overdue.length - soon.length;
-  meta.textContent = overdue.length || soon.length
-    ? `${overdue.length} vencido${overdue.length === 1 ? "" : "s"} · ${soon.length} vence em 7 dias`
-    : "Nada para cobrar agora.";
-  if (!blocks.length) {
-    blocks.push("<p class='panel-hint'>Nenhum vencido e nada vence nos próximos 7 dias.</p>");
-  }
-  if (waiting > 0) {
-    blocks.push(`<button type="button" class="fiado-jump" data-fiado-view="abater">${waiting} em aberto · ver saldos</button>`);
-  }
-  list.innerHTML = blocks.join("");
-}
-
-function renderFiado() {
-  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
-  const overdueItems = openItems.filter((item) => item.status === "overdue");
-  const dueSoon = openItems.filter(isDueSoon);
-  const receivable = openItems.reduce((sum, item) => sum + Number(item.balance || 0), 0);
-  const receivedMonth = fiadoMonthPayments().reduce((sum, row) => sum + Number(row.pay.amount || 0), 0);
-  const openClients = (catalog.clients || []).filter((client) => clientLedger(client.id).balance > 0).length;
-
-  const summary = document.getElementById("fiado-summary");
-  if (summary) {
-    summary.innerHTML = `
-      <button type="button" class="fiado-kpi is-receivable${fiadoView === "abater" ? " is-active" : ""}" data-fiado-view="abater"><span>A receber</span><strong>${money(receivable)}</strong></button>
-      <button type="button" class="fiado-kpi is-overdue${fiadoView === "cobrar" ? " is-active" : ""}" data-fiado-view="cobrar"><span>Vencidos</span><strong>${overdueItems.length}</strong></button>
-      <button type="button" class="fiado-kpi is-soon" data-fiado-view="cobrar"><span>Vence em 7 dias</span><strong>${dueSoon.length}</strong></button>
-      <button type="button" class="fiado-kpi is-received${fiadoView === "recebido" ? " is-active" : ""}" data-fiado-view="recebido"><span>Recebido no mês</span><strong>${money(receivedMonth)}</strong></button>
-    `;
-  }
-
-  renderFiadoDock(overdueItems.length + dueSoon.length, openItems.length, openClients);
-  applyFiadoView();
-  fillClientSelects();
-  fillFiadoProducts(lastFiadoProductId);
-  renderClients();
-  renderFiadoQueue(openItems, overdueItems, dueSoon);
-}
-
-function openClient(client) {
-  const form = document.getElementById("client-form");
-  form.reset();
-  showError(document.getElementById("client-error"), "");
-  document.getElementById("client-dialog-title").textContent = client ? "Editar cliente" : "Novo cliente";
-  form.elements.id.value = client?.id || "";
-  form.elements.name.value = client?.name || "";
-  form.elements.phone.value = client?.phone || "";
-  form.elements.address.value = client?.address || "";
-  form.elements.notes.value = client?.notes || "";
-  document.getElementById("client-dialog").showModal();
-}
-
-function fiadoPayloadFromEntry(entry, payments) {
-  return {
-    quantity: entry.quantity,
-    unitPrice: entry.unitPrice,
-    installmentAmount: entry.installmentAmount ?? 0,
-    nextDueDate: entry.nextDueDate || "",
-    notes: entry.notes || "",
-    payments,
-    expectedPaymentIds: paymentIdsOf(entry)
-  };
-}
-
-function paymentIdsOf(entry) {
-  return (entry?.payments || []).map((pay) => pay.id);
-}
-
-async function persistFiadoPayments(entry, payments) {
-  return request(`/api/admin/fiado/${entry.id}`, {
-    method: "PUT",
-    body: JSON.stringify(fiadoPayloadFromEntry(entry, payments))
-  });
-}
-
-function openPayment(entry) {
-  const form = document.getElementById("payment-form");
-  form.reset();
-  showError(document.getElementById("payment-error"), "");
-  document.getElementById("payment-dialog-title").textContent = "Registrar abatimento";
-  document.getElementById("payment-submit-btn").textContent = "Confirmar abatimento";
-  document.getElementById("payment-paid-at-wrap").hidden = true;
-  document.getElementById("payment-next-due-wrap").hidden = false;
-  form.elements.fiadoId.value = entry.id;
-  form.elements.paymentId.value = "";
-  form.elements.nextDueDate.value = entry.nextDueDate || "";
-  document.getElementById("payment-summary").innerHTML = `
-    <span class="payment-summary-label">Cliente</span>
-    <strong>${text(entry.clientName)}</strong>
-    <span class="payment-summary-label">Produto</span>
-    <span>${text(entry.productName)}</span>
-    <span class="payment-summary-label">Saldo atual</span>
-    <strong class="payment-summary-balance">${money(entry.balance)}</strong>`;
-  document.getElementById("payment-dialog").showModal();
-}
-
-function openPaymentEdit(entry, payment) {
-  const form = document.getElementById("payment-form");
-  form.reset();
-  showError(document.getElementById("payment-error"), "");
-  document.getElementById("payment-dialog-title").textContent = "Editar abatimento";
-  document.getElementById("payment-submit-btn").textContent = "Salvar abatimento";
-  document.getElementById("payment-paid-at-wrap").hidden = false;
-  document.getElementById("payment-next-due-wrap").hidden = false;
-  form.elements.fiadoId.value = entry.id;
-  form.elements.paymentId.value = payment.id;
-  form.elements.paidAt.value = payment.paidAt ? String(payment.paidAt).slice(0, 10) : "";
-  form.elements.amount.value = Number(payment.amount || 0);
-  form.elements.note.value = payment.note || "";
-  form.elements.nextDueDate.value = entry.nextDueDate || "";
-  document.getElementById("payment-summary").innerHTML = `
-    <span class="payment-summary-label">Cliente</span>
-    <strong>${text(entry.clientName)}</strong>
-    <span class="payment-summary-label">Produto</span>
-    <span>${text(entry.productName)}</span>
-    <span class="payment-summary-label">Saldo atual</span>
-    <strong class="payment-summary-balance">${money(entry.balance)}</strong>`;
-  document.getElementById("payment-dialog").showModal();
-}
-
-function renderFiadoPaymentRow(payment = {}) {
-  const paidDate = payment.paidAt
-    ? String(payment.paidAt).slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  return `
-    <article class="fiado-payment-row">
-      <input type="hidden" data-field="id" value="${text(payment.id || "")}">
-      <label>Data<input type="date" data-field="paidAt" value="${paidDate}" required></label>
-      <label>Valor<input type="number" data-field="amount" min="0.01" step="0.01" value="${Number(payment.amount || 0) || ""}" required></label>
-      <label>Obs.<input type="text" data-field="note" value="${text(payment.note || "")}" placeholder="Ex.: PIX"></label>
-      <button type="button" data-remove-payment-row>Remover</button>
-    </article>`;
-}
-
-function renderFiadoPaymentEditor(payments = []) {
-  const list = document.getElementById("fiado-payments-list");
-  if (!list) return;
-  list.innerHTML = payments.length
-    ? payments.map((pay) => renderFiadoPaymentRow(pay)).join("")
-    : "<p class='panel-hint'>Nenhum abatimento registrado.</p>";
-}
-
-function collectFiadoPaymentEditor() {
-  return [...document.querySelectorAll("#fiado-payments-list .fiado-payment-row")].map((row) => ({
-    id: row.querySelector('[data-field="id"]').value,
-    paidAt: row.querySelector('[data-field="paidAt"]').value,
-    amount: Number(row.querySelector('[data-field="amount"]').value),
-    note: row.querySelector('[data-field="note"]').value
-  }));
-}
-
-function updateFiadoEditTotals(form) {
-  const quantity = Number(form.elements.quantity.value || 0);
-  const unitPrice = Number(form.elements.unitPrice.value || 0);
-  const total = quantity * unitPrice;
-  const paid = collectFiadoPaymentEditor().reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
-  const balance = Math.max(0, total - paid);
-  document.getElementById("fiado-edit-totals").innerHTML = `
-    <span>Total: <strong>${money(total)}</strong></span>
-    <span>Pago: <strong>${money(paid)}</strong></span>
-    <span>Saldo: <strong class="payment-summary-balance">${money(balance)}</strong></span>`;
-}
-
-function openFiadoEdit(entry) {
-  const form = document.getElementById("fiado-edit-form");
-  form.reset();
-  showError(document.getElementById("fiado-edit-error"), "");
-  const client = resolveFiadoClient(entry);
-  form.elements.id.value = entry.id;
-  form.elements.quantity.value = entry.quantity;
-  form.elements.unitPrice.value = entry.unitPrice;
-  form.elements.installmentAmount.value = entry.installmentAmount ?? "";
-  form.elements.nextDueDate.value = entry.nextDueDate || "";
-  form.elements.notes.value = entry.notes || "";
-  document.getElementById("fiado-edit-summary").innerHTML =
-    `<strong>${text(client.name)}</strong> · ${text(entry.productName)}`;
-  renderFiadoPaymentEditor(entry.payments || []);
-  updateFiadoEditTotals(form);
-  document.getElementById("fiado-edit-dialog").showModal();
-}
-
-async function loadCatalog() {
-  catalog = await request("/api/admin/store");
-  if (!Array.isArray(catalog.sales)) catalog.sales = [];
-  if (!Array.isArray(catalog.clients)) catalog.clients = [];
-  if (!Array.isArray(catalog.fiado)) catalog.fiado = [];
-  if (!Array.isArray(catalog.prospects)) catalog.prospects = [];
-  if (!catalog.promoPopup) catalog.promoPopup = {};
-  refreshSoldIndex();
-  renderPromoProducts();
-  renderProducts();
-  renderPromoPopupSettings();
-  renderBanners();
-  renderProspects();
-  renderStock();
-  renderSales();
-  renderFiado();
-}
-
-function openProduct(product) {
-  productForm.reset();
-  showError(productError, "");
-  document.getElementById("product-dialog-title").textContent = product ? "Editar produto" : "Novo produto";
-  productForm.elements.id.value = product?.id || "";
-  productForm.elements.name.value = product?.name || "";
-  productForm.elements.categorySlug.value = product?.categorySlug || "correntes";
-  productForm.elements.badge.value = product?.badge || "";
-  productForm.elements.collection.value = product?.collection || "";
-  productForm.elements.priceMin.value = product?.priceMin ?? "";
-  productForm.elements.priceMax.value = product?.priceMax ?? "";
-  productForm.elements.priceList.value = product?.priceList ?? "";
-  productForm.elements.cost.value = product?.cost ?? 0;
-  productForm.elements.sku.value = product?.sku || "";
-  productForm.elements.active.checked = product ? product.active !== false : true;
-  productForm.elements.image.value = product?.image || "";
-  productForm.elements.variants.value = (product?.thickness || []).join(", ");
-  productForm.elements.description.value = product?.description || "";
-  productForm.elements.detailsText.value = (product?.details || []).join("\n");
-  productForm.elements.stock.value = product?.stock ?? 1;
-  productStockSeen = product ? Number(product.stock ?? 0) : null;
-  productForm.elements.showOnHome.checked = product ? product.showOnHome !== false : true;
-  productImages = product?.images?.length ? [...product.images] : (product?.image ? [product.image] : []);
-  renderPhotoPreviews();
-  productDialog.showModal();
-}
-
-const MAX_BANNER_VIDEO_BYTES = 50 * 1024 * 1024;
-
-function formatFileSize(bytes) {
-  const size = Number(bytes || 0);
-  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
-  return `${size} B`;
-}
-
-function uploadSizeError(file, maxBytes = MAX_BANNER_VIDEO_BYTES) {
-  return `Arquivo ${formatFileSize(file.size)}. Máximo ${formatFileSize(maxBytes)}. Comprima o MP4 (720p) ou envie só o link abaixo.`;
-}
-
-function parseStorageError(raw) {
-  const message = String(raw || "");
-  if (/maximum allowed size|payload too large|entity too large/i.test(message)) {
-    return `Vídeo grande demais para o storage (máx. ${formatFileSize(MAX_BANNER_VIDEO_BYTES)}). Comprima o MP4 ou cole o link do vídeo no campo abaixo.`;
-  }
-  return message;
 }
 
 function guessUploadMime(file) {
@@ -1537,793 +133,1465 @@ function guessUploadMime(file) {
   if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
   return file.type || "application/octet-stream";
 }
+const fileSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
 
+// Envia direto para o Storage com URL assinada; sem Storage, usa o envio pelo servidor.
 async function uploadFile(file, { banner = false } = {}) {
   const contentType = guessUploadMime(file);
   if (banner && contentType.startsWith("video/") && file.size > MAX_BANNER_VIDEO_BYTES) {
-    throw new Error(uploadSizeError(file));
+    throw new Error(`Vídeo com ${fileSize(file.size)}. O máximo é 50 MB: comprima o MP4 (720p) ou cole o link do arquivo.`);
   }
-  const uploadUrlEndpoint = banner ? "/api/admin/upload-url?media=banner" : "/api/admin/upload-url";
-  const signedResponse = await fetch(uploadUrlEndpoint, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: file.name,
-      contentType,
-      size: file.size
-    })
+  const signed = await fetch(banner ? "/api/admin/upload-url?media=banner" : "/api/admin/upload-url", {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, contentType, size: file.size })
   });
-  const signedData = await signedResponse.json().catch(() => ({}));
-  if (signedResponse.status === 401) {
-    showLogin();
-    throw new Error("Sessão expirada. Entre novamente e repita o envio.");
-  }
-  if (signedResponse.ok && signedData.uploadUrl) {
-    const putResponse = await fetch(signedData.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: file
-    });
-    if (!putResponse.ok) {
-      const raw = await putResponse.text().catch(() => "");
-      throw new Error(parseStorageError(raw) || "Falha no envio do arquivo para o storage.");
+  const signedData = await signed.json().catch(() => ({}));
+  if (signed.status === 401) { showLogin("Sua sessão expirou. Entre de novo e repita o envio."); throw new Error("Sessão expirada."); }
+  if (signed.ok && signedData.uploadUrl) {
+    const put = await fetch(signedData.uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: file });
+    if (!put.ok) {
+      const raw = await put.text().catch(() => "");
+      if (/maximum allowed size|payload too large|entity too large/i.test(raw)) throw new Error("Arquivo grande demais para o storage (máx. 50 MB).");
+      throw new Error(raw || "Falha ao enviar o arquivo.");
     }
-    return { url: signedData.url, mediaType: signedData.mediaType };
+    return { url: signedData.url, mediaType: signedData.mediaType || (contentType.startsWith("video/") ? "video" : "image") };
   }
-  if (signedResponse.status !== 501) {
-    throw new Error(signedData.error || "Falha ao preparar envio do arquivo.");
-  }
-
+  if (signed.status !== 501) throw new Error(signedData.error || "Não foi possível preparar o envio do arquivo.");
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(banner ? "/api/admin/upload?media=banner" : "/api/admin/upload", {
-    method: "POST",
-    credentials: "same-origin",
-    body
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || "Falha no envio do arquivo.");
-  }
+  const res = await fetch(banner ? "/api/admin/upload?media=banner" : "/api/admin/upload", { method: "POST", credentials: "same-origin", body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Falha ao enviar o arquivo.");
   return data;
 }
 
-function collectBanners() {
-  return [...bannerList.querySelectorAll(".banner-card")].map((card) => {
-    const type = card.querySelector('[data-field="type"]').value;
-    return {
-      id: card.querySelector('[data-field="id"]').value,
-      title: card.querySelector('[data-field="title"]').value,
-      type,
-      image: card.querySelector('[data-field="image"]').value,
-      video: type === "video" ? card.querySelector('[data-field="video"]').value : ""
-    };
+// ---------- regras da loja ----------
+const productById = (id) => catalog.products.find((p) => p.id === id);
+const photosOf = (p) => (p?.images?.length ? p.images : p?.image ? [p.image] : []);
+// Capa = foto do cartão na vitrine; pode não ser a 1ª da galeria (ex.: foto de mostruário).
+const coverOf = (p) => p?.image || photosOf(p)[0] || "";
+const hasSalePrice = (p) => num(p.priceList) > num(p.priceMax);
+const isPromo = (p) => p.badge === "sale" || hasSalePrice(p);
+const isAvailable = (p) => num(p.stock) > 0;
+const isOnStore = (p) => isAvailable(p) && p.active !== false;
+const missingPhotos = (p) => PHOTO_SLOTS.slice(photosOf(p).length, 2).map(([n]) => n);
+const needsPhoto = (p) => isOnStore(p) && photosOf(p).length < 2;
+function priceLabel(p) {
+  return num(p.priceMin) !== num(p.priceMax) ? `${moneyTxt(p.priceMin)}–${brl(p.priceMax)}` : moneyTxt(p.priceMin);
+}
+function thumbHtml(p, cls = "thumb") {
+  const src = coverOf(p);
+  return src ? `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy">` : `<span class="${cls} thumb--ph">${esc(initials(p?.name || "LB"))}</span>`;
+}
+function grams(name) {
+  const m = String(name || "").match(/(\d+[.,]\d+|\d+)\s*(g|gr|gramas)\b/i) || String(name || "").match(/\s(\d+[.,]\d+)\s*$/);
+  return m ? `${m[1].replace(".", ",")} g` : "";
+}
+
+const saleRevenue = (s) => (s.type === "fiado" ? num(s.paidAtSale) : num(s.total));
+const saleCost = (s) => (s.type === "fiado_payment" ? 0 : num(s.unitCost) * num(s.quantity || 0));
+const saleDay = (s) => localISO(s.createdAt);
+function saleKind(s) {
+  if (s.type === "fiado") return { label: "Fiado", cls: "gold" };
+  if (s.type === "fiado_payment") return { label: "Abatimento", cls: "green" };
+  return { label: s.paymentMethod || "À vista", cls: "" };
+}
+function clientOf(entry) {
+  const c = catalog.clients.find((x) => x.id === entry.clientId);
+  return { id: c?.id || entry.clientId || "", name: c?.name || entry.clientName || "Cliente", phone: c?.phone || entry.clientPhone || "" };
+}
+function isDueSoon(e) {
+  if (!e.nextDueDate || e.status !== "open") return false;
+  return e.nextDueDate <= addDays(localISO(), 7);
+}
+function daysLate(e) {
+  if (!e.nextDueDate) return 0;
+  return Math.round((new Date(`${localISO()}T12:00:00`) - new Date(`${e.nextDueDate}T12:00:00`)) / 86400000);
+}
+const openFiado = () => catalog.fiado.filter((e) => e.status !== "paid");
+function fiadoTone(e) {
+  if (e.status === "paid") return "paid";
+  if (e.status === "overdue") return "overdue";
+  return isDueSoon(e) ? "soon" : "open";
+}
+function collectMessage(e) {
+  const c = clientOf(e);
+  const first = c.name.split(" ")[0];
+  const lines = [`Olá ${first}, tudo bem?`, `Passando para lembrar do saldo de ${moneyTxt(e.balance)} da ${e.productName} na LB jewelry.`];
+  if (e.nextDueDate) lines.push(e.status === "overdue" ? `O vencimento foi em ${fmtDateFull(e.nextDueDate)}.` : `O próximo vencimento é ${fmtDateFull(e.nextDueDate)}.`);
+  if (num(e.installmentAmount)) lines.push(`Parcela combinada: ${moneyTxt(e.installmentAmount)}.`);
+  lines.push("Podemos combinar o pagamento?");
+  return lines.join("\n");
+}
+function clientLedger(clientId) {
+  const entries = catalog.fiado.filter((e) => e.clientId === clientId);
+  const open = entries.filter((e) => e.status !== "paid");
+  return {
+    entries, open,
+    balance: open.reduce((s, e) => s + num(e.balance), 0),
+    nextDue: open.map((e) => e.nextDueDate).filter(Boolean).sort()[0] || "",
+    overdue: open.some((e) => e.status === "overdue")
+  };
+}
+function monthPayments(monthKey = localISO().slice(0, 7)) {
+  const rows = [];
+  catalog.fiado.forEach((entry) => (entry.payments || []).forEach((pay) => { if (localISO(pay.paidAt).slice(0, 7) === monthKey) rows.push({ entry, pay }); }));
+  return rows.sort((a, b) => String(b.pay.paidAt).localeCompare(String(a.pay.paidAt)));
+}
+
+function productPayload(p, overrides = {}) {
+  return {
+    name: p.name, categorySlug: p.categorySlug, collection: p.collection || "", sku: p.sku || "",
+    badge: p.badge || "", priceMin: num(p.priceMin), priceMax: num(p.priceMax), priceList: p.priceList ?? "",
+    cost: num(p.cost), stock: num(p.stock), stockSeen: num(p.stock), showOnHome: p.showOnHome !== false, active: p.active !== false,
+    image: coverOf(p), images: photosOf(p), thickness: p.thickness || [], details: p.details || [], description: p.description || "",
+    ...overrides
+  };
+}
+
+// ---------- telas ----------
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+}
+function setTitle() {
+  const s = $(`#s-${state.screen}`);
+  if (state.screen === "home") {
+    $("#top-title").textContent = greeting();
+    $("#top-sub").textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  } else {
+    $("#top-title").textContent = s.dataset.title;
+    $("#top-sub").textContent = s.dataset.sub;
+  }
+}
+function go(screen, { scroll = true } = {}) {
+  if (!$(`#s-${screen}`)) screen = "home";
+  state.screen = screen;
+  $$(".screen").forEach((s) => { s.hidden = !loaded || s.id !== `s-${screen}`; });
+  $$(".tab[data-go], .nav[data-go]").forEach((b) => (b.dataset.go === screen ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+  setTitle();
+  try { history.replaceState(null, "", `#${screen}`); } catch {}
+  if (scroll) window.scrollTo({ top: 0 });
+  if (screen === "vitrine") renderHeroPreview();
+}
+
+function renderAll() {
+  renderHome();
+  renderPecas();
+  renderVendas();
+  renderFiado();
+  renderVitrine();
+  const overdue = catalog.fiado.filter((e) => e.status === "overdue").length;
+  $$("[data-overdue-badge]").forEach((b) => { b.hidden = !overdue; b.textContent = overdue; });
+  setTitle();
+}
+
+// ---- início ----
+function monthRevenue(key) {
+  const rows = catalog.sales.filter((s) => localISO(s.createdAt).slice(0, 7) === key);
+  const revenue = rows.reduce((t, s) => t + saleRevenue(s), 0);
+  const cost = rows.reduce((t, s) => t + saleCost(s), 0);
+  return { rows, revenue, cost, count: rows.filter((s) => s.type !== "fiado_payment").length };
+}
+function renderHome() {
+  const now = new Date();
+  const key = localISO(now).slice(0, 7);
+  const prevKey = localISO(new Date(now.getFullYear(), now.getMonth() - 1, 15)).slice(0, 7);
+  const cur = monthRevenue(key);
+  const prev = monthRevenue(prevKey);
+  $("#h-label").textContent = `Recebido em ${MONTHS_LONG[now.getMonth()]}`;
+  $("#h-month").innerHTML = money(cur.revenue);
+  $("#h-result").textContent = moneyTxt(cur.revenue - cur.cost);
+  $("#h-margin").textContent = cur.revenue ? `${Math.round((cur.revenue - cur.cost) / cur.revenue * 100)}%` : "—";
+  $("#h-count").textContent = plural(cur.count, "venda", "vendas");
+  if (prev.revenue > 0) {
+    const pct = Math.round((cur.revenue / prev.revenue - 1) * 100);
+    $("#h-delta").innerHTML = `<span class="delta${pct < 0 ? " down" : ""}">${pct >= 0 ? "↑" : "↓"} ${Math.abs(pct)}% vs. ${MONTHS[(now.getMonth() + 11) % 12]}</span>`;
+  } else $("#h-delta").innerHTML = "";
+
+  const open = openFiado();
+  const receivable = open.reduce((t, e) => t + num(e.balance), 0);
+  const overdue = open.filter((e) => e.status === "overdue").sort((a, b) => num(b.balance) - num(a.balance));
+  const soon = open.filter(isDueSoon);
+  const available = catalog.products.filter(isAvailable);
+  const units = available.reduce((t, p) => t + num(p.stock), 0);
+  $("#home-kpis").innerHTML = `
+    <button class="kpi" type="button" data-go-fiado="aberto"><span class="label">A receber</span><span class="v">${moneyK(receivable)}</span></button>
+    <button class="kpi${overdue.length ? " alert" : ""}" type="button" data-go-fiado="cobrar"><span class="label">Vencidos</span><span class="v money">${overdue.length}</span></button>
+    <button class="kpi" type="button" data-go="pecas"><span class="label">Em estoque</span><span class="v money">${units}<small style="font:500 11px var(--ui);color:var(--muted);margin-left:3px">un.</small></span></button>`;
+
+  const semFoto = catalog.products.filter(needsPhoto);
+  const attn = [...overdue.slice(0, 4), ...soon.slice(0, 2)].map(rowFiado);
+  if (semFoto.length) attn.push(`<button class="rowi rowi--plain" type="button" data-pecas-filter="fotos"><span class="avatar" data-s="soon">${icon("camera", "i-sm")}</span><span class="mid"><span class="name">${plural(semFoto.length, "peça na loja sem foto do mostruário", "peças na loja sem foto do mostruário")}</span><span class="meta">${semFoto.slice(0, 3).map((p) => esc(p.name)).join(", ")}${semFoto.length > 3 ? "…" : ""}</span></span>${icon("chev", "chev")}</button>`);
+  if (overdue.length > 4) attn.push(`<button class="rowi rowi--plain" type="button" data-go-fiado="cobrar"><span class="avatar">+${overdue.length - 4}</span><span class="mid"><span class="name">Mais ${plural(overdue.length - 4, "vencido", "vencidos")}</span><span class="meta">Ver a fila de cobrança</span></span>${icon("chev", "chev")}</button>`);
+  $("#home-attn").innerHTML = attn.length ? attn.join("") : `<p class="empty"><b>Tudo em dia</b>Nenhum fiado vencido e as peças da loja têm fotos.</p>`;
+
+  const recent = catalog.sales.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 4);
+  $("#home-sales").innerHTML = recent.length ? recent.map(rowSale).join("") : `<p class="empty">Nenhuma venda registrada ainda.</p>`;
+
+  const offers = catalog.products.filter((p) => isPromo(p) && isAvailable(p)).length;
+  const popup = catalog.promoPopup || {};
+  const newLeads = catalog.prospects.filter(isNewLead).length;
+  const cost = available.reduce((t, p) => t + num(p.cost) * num(p.stock), 0);
+  const value = available.reduce((t, p) => t + num(p.priceMin) * num(p.stock), 0);
+  $("#home-store").innerHTML = `
+    <button class="rowi rowi--plain" type="button" data-go="vitrine"><span class="avatar">${icon("store", "i-sm")}</span><span class="mid"><span class="name">Vitrine da loja</span><span class="meta">${plural(catalog.banners.length, "slide", "slides")} no banner · ${plural(offers, "oferta", "ofertas")} · cupom ${popup.enabled !== false ? "ativo" : "desligado"}${newLeads ? ` · ${plural(newLeads, "contato novo", "contatos novos")}` : ""}</span></span>${icon("chev", "chev")}</button>
+    <button class="rowi rowi--plain" type="button" data-go="pecas"><span class="avatar">${icon("gem", "i-sm")}</span><span class="mid"><span class="name">${plural(available.length, "peça disponível", "peças disponíveis")}</span><span class="meta">Custo ${moneyTxt(cost)} · venda ${moneyTxt(value)}</span></span>${icon("chev", "chev")}</button>`;
+}
+
+// ---- peças ----
+function rowProduct(p) {
+  const tags = [];
+  if (p.active === false) tags.push('<span class="warn">inativa</span>');
+  if (needsPhoto(p)) tags.push('<span class="warn">sem mostruário</span>');
+  if (hasSalePrice(p) && isAvailable(p)) tags.push(`<span class="sale-t">oferta −${Math.round((1 - num(p.priceMax) / num(p.priceList)) * 100)}%</span>`);
+  const meta = [p.category, grams(p.name), p.sku].filter(Boolean).map(esc).join(" · ") + (tags.length ? ` · ${tags.join(" · ")}` : "");
+  const stock = isAvailable(p) ? `<span class="pill${num(p.stock) === 1 ? "" : " green"}">${p.stock} un.</span>` : `<span class="pill">Vendida</span>`;
+  return `<button class="rowi${p.active === false ? " is-muted" : ""}" type="button" data-product="${esc(p.id)}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${meta}</span></span><span class="end">${money(p.priceMin)}${stock}</span></button>`;
+}
+function pecasPool() {
+  const view = state.pecas.view;
+  return catalog.products.filter((p) => (view === "sold" ? !isAvailable(p) : isAvailable(p)));
+}
+function renderPecas() {
+  const available = catalog.products.filter(isAvailable);
+  const sold = catalog.products.filter((p) => !isAvailable(p));
+  const st = state.pecas;
+  $("#pecas-view").innerHTML = `<button type="button" data-pecas-view="available" aria-pressed="${st.view === "available"}">Disponíveis<small>${available.length}</small></button><button type="button" data-pecas-view="sold" aria-pressed="${st.view === "sold"}">Vendidas<small>${sold.length}</small></button>`;
+  const pool = pecasPool();
+  const filters = [["all", "Todas", pool.length], ...CATEGORIES.map((c) => [c.slug, c.label, pool.filter((p) => p.categorySlug === c.slug).length])];
+  const extra = [["promo", "Promoção", pool.filter(isPromo).length], ["home", "Na home", pool.filter((p) => p.showOnHome !== false).length], ["inactive", "Inativas", pool.filter((p) => p.active === false).length]];
+  const fotos = pool.filter((p) => photosOf(p).length < 2 && isAvailable(p) && p.active !== false).length;
+  $("#pecas-chips").innerHTML = filters.filter(([id, , n]) => id === "all" || n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
+    + extra.filter(([, , n]) => n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
+    + (fotos ? `<button class="chip warn" type="button" data-pecas-filter="fotos" aria-pressed="${st.filter === "fotos"}">Falta foto<small>${fotos}</small></button>` : "");
+  const q = st.q.trim().toLowerCase();
+  const list = pool.filter((p) => {
+    const f = st.filter;
+    if (CATEGORIES.some((c) => c.slug === f) && p.categorySlug !== f) return false;
+    if (f === "promo" && !isPromo(p)) return false;
+    if (f === "home" && p.showOnHome === false) return false;
+    if (f === "inactive" && p.active !== false) return false;
+    if (f === "fotos" && !(photosOf(p).length < 2 && p.active !== false)) return false;
+    return !q || `${p.name} ${p.category} ${p.collection || ""} ${p.sku || ""} ${p.id}`.toLowerCase().includes(q);
+  }).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const cost = list.reduce((t, p) => t + num(p.cost) * Math.max(num(p.stock), 0), 0);
+  const value = list.reduce((t, p) => t + num(p.priceMin) * Math.max(num(p.stock), 0), 0);
+  $("#pecas-sum").innerHTML = st.view === "available"
+    ? `<span><b>${plural(list.length, "peça", "peças")}</b></span>·<span>custo <b>${moneyTxt(cost)}</b></span>·<span>venda <b>${moneyTxt(value)}</b></span>`
+    : `<span><b>${plural(list.length, "peça vendida", "peças vendidas")}</b></span>`;
+  $("#pecas-list").innerHTML = list.length ? list.map(rowProduct).join("") : `<p class="empty"><b>Nenhuma peça encontrada</b>Tente outro nome, gramas ou código, ou troque o filtro.</p>`;
+}
+
+// ---- vendas ----
+function salesInPeriod() {
+  const { period, category } = state.vendas;
+  const now = new Date();
+  return catalog.sales.filter((s) => {
+    const d = new Date(s.createdAt);
+    if (Number.isNaN(d.getTime())) return false;
+    if (period === "month" && (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear())) return false;
+    if (period === "quarter" && d < new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)) return false;
+    if (period === "year" && d.getFullYear() !== now.getFullYear()) return false;
+    if (category !== "all") {
+      const p = productById(s.productId);
+      if (p?.categorySlug !== category) return false;
+    }
+    return true;
+  }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+function rowSale(s) {
+  const p = productById(s.productId);
+  const k = saleKind(s);
+  const who = s.clientName || (s.clientId ? clientOf(s).name : "");
+  const when = saleDay(s) === localISO() ? fmtTime(s.createdAt) : fmtDate(s.createdAt);
+  return `<button class="rowi" type="button" data-sale="${esc(s.id)}">${thumbHtml(p || { name: s.productName })}<span class="mid"><span class="name">${esc(s.productName || "Recebimento")}</span><span class="meta">${[who, when].filter(Boolean).map(esc).join(" · ")}</span></span><span class="end">${money(saleRevenue(s))}<span class="pill ${k.cls}">${esc(k.label)}</span></span></button>`;
+}
+function niceMax(v) {
+  if (v <= 0) return 10;
+  const pow = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 2.5, 5, 10].map((m) => m * pow).find((m) => m >= v);
+}
+function renderChart() {
+  const now = new Date();
+  const cat = state.vendas.category;
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+    return { key: localISO(d).slice(0, 7), label: MONTHS[d.getMonth()], total: 0 };
+  });
+  catalog.sales.forEach((s) => {
+    if (cat !== "all" && productById(s.productId)?.categorySlug !== cat) return;
+    const m = months.find((x) => x.key === localISO(s.createdAt).slice(0, 7));
+    if (m) m.total += saleRevenue(s) / 1000;
+  });
+  const W = 340, H = 160, L = 34, R = 14, T = 20, B = 26;
+  const max = niceMax(Math.max(...months.map((m) => m.total), 1));
+  const x = (i) => L + i * (W - L - R) / (months.length - 1);
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  const pts = months.map((m, i) => [x(i), y(m.total)]);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+  const ticks = [0, max / 2, max];
+  const fmtK = (v) => (v >= 10 ? Math.round(v) : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }));
+  const last = months.length - 1;
+  $("#chart").innerHTML = `<defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--gold)" stop-opacity=".28"/><stop offset="1" stop-color="var(--gold)" stop-opacity="0"/></linearGradient></defs>
+    ${ticks.map((v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${fmtK(v)}</text>`).join("")}
+    <path d="${line} L${x(last)} ${y(0)} L${x(0)} ${y(0)} Z" fill="url(#ga)"/>
+    <path d="${line}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
+    ${pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i === last ? 4.5 : 2.5}" fill="${i === last ? "var(--gold)" : "var(--surface)"}" stroke="var(--gold)" stroke-width="1.6"/>`).join("")}
+    <text class="ax-strong" x="${Math.min(pts[last][0], W - R - 2)}" y="${Math.max(pts[last][1] - 10, 10)}" text-anchor="end">${fmtK(months[last].total)}</text>
+    ${months.map((m, i) => `<text class="${i === last ? "ax-strong" : "ax"}" x="${x(i)}" y="${H - 8}" text-anchor="middle">${m.label}</text>`).join("")}`;
+}
+function renderVendas() {
+  const v = state.vendas;
+  const periods = [["month", "Mês"], ["quarter", "Trimestre"], ["year", "Ano"], ["all", "Tudo"]];
+  $("#vendas-period").innerHTML = periods.map(([id, l]) => `<button type="button" data-period="${id}" aria-pressed="${v.period === id}">${l}</button>`).join("");
+  $("#vendas-cats").innerHTML = [["all", "Todas"], ...CATEGORIES.map((c) => [c.slug, c.label])].map(([id, l]) => `<button class="chip" type="button" data-sale-cat="${id}" aria-pressed="${v.category === id}">${l}</button>`).join("");
+  const rows = salesInPeriod();
+  const total = rows.reduce((t, s) => t + saleRevenue(s), 0);
+  const cost = rows.reduce((t, s) => t + saleCost(s), 0);
+  const salesOnly = rows.filter((s) => s.type !== "fiado_payment");
+  const units = salesOnly.reduce((t, s) => t + num(s.quantity), 0);
+  const now = new Date();
+  const label = { month: `Recebido em ${MONTHS_LONG[now.getMonth()]}`, quarter: "Recebido no trimestre", year: `Recebido em ${now.getFullYear()}`, all: "Recebido no total" }[v.period];
+  $("#v-label").textContent = label;
+  $("#v-total").innerHTML = money(total);
+  $("#v-cost").textContent = moneyTxt(cost);
+  $("#v-res").textContent = moneyTxt(total - cost);
+  $("#v-ticket").textContent = salesOnly.length ? moneyTxt(Math.round(salesOnly.reduce((t, s) => t + num(s.total), 0) / salesOnly.length)) : "—";
+  $("#v-units").textContent = plural(units, "peça vendida", "peças vendidas");
+  renderChart();
+  const byCat = {};
+  rows.forEach((s) => { const c = productById(s.productId)?.category || "Outros"; byCat[c] = (byCat[c] || 0) + saleRevenue(s); });
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const top = cats[0]?.[1] || 1;
+  $("#cat-bars").innerHTML = `<span class="label">Por categoria</span>` + (cats.length ? cats.map(([n, val], i) => `<div class="bar"><span>${esc(n)}</span><span class="track"><span class="fill${i === 1 ? " g" : ""}" style="width:${Math.max(2, val / top * 100)}%"></span></span><span class="val">${moneyTxt(val)}</span></div>`).join("") : `<p class="hint">Sem vendas neste período.</p>`);
+  $("#hist-title").textContent = `Histórico · ${rows.length}`;
+  const shown = rows.slice(0, v.limit);
+  const days = [...new Set(shown.map(saleDay))];
+  $("#sales-days").innerHTML = shown.length ? days.map((d) => {
+    const list = shown.filter((s) => saleDay(s) === d);
+    return `<div><div class="day-head"><h4>${esc(dayLabel(d))}</h4><span class="label">${moneyTxt(list.reduce((t, s) => t + saleRevenue(s), 0))}</span></div><div class="group">${list.map(rowSale).join("")}</div></div>`;
+  }).join("") + (rows.length > shown.length ? `<button class="btn btn--ghost" type="button" data-more-sales>Mostrar mais ${Math.min(40, rows.length - shown.length)}</button>` : "")
+    : `<div class="group"><p class="empty"><b>Nenhuma venda neste período</b>Troque o período ou registre uma venda.</p></div>`;
+}
+
+// ---- fiado ----
+function rowFiado(e) {
+  const c = clientOf(e);
+  const tone = fiadoTone(e);
+  const late = daysLate(e);
+  const pill = tone === "overdue" ? `<span class="pill red">${late > 0 ? `${late} ${late === 1 ? "dia" : "dias"}` : "vencido"}</span>`
+    : tone === "soon" ? `<span class="pill amber">${late === 0 ? "vence hoje" : `em ${-late} ${-late === 1 ? "dia" : "dias"}`}</span>`
+    : tone === "paid" ? `<span class="pill green">Quitado</span>` : `<span class="pill">${e.nextDueDate ? fmtDate(e.nextDueDate) : "sem data"}</span>`;
+  const meta = [e.productName, e.status !== "paid" && e.nextDueDate ? `${e.status === "overdue" ? "venceu" : "vence"} ${fmtDate(e.nextDueDate)}` : ""].filter(Boolean).map(esc).join(" · ");
+  return `<button class="rowi rowi--plain" type="button" data-fiado="${esc(e.id)}"><span class="avatar" data-s="${tone}">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${meta}</span></span><span class="end">${money(e.status === "paid" ? e.total : e.balance)}${pill}</span></button>`;
+}
+function rowClient(c) {
+  const l = clientLedger(c.id);
+  const tone = l.overdue ? "overdue" : l.balance > 0 ? "open" : "paid";
+  const meta = [fmtPhone(c.phone), l.nextDue ? `vence ${fmtDate(l.nextDue)}` : "", l.open.length ? plural(l.open.length, "fiado aberto", "fiados abertos") : l.entries.length ? "sem saldo" : "sem fiado"].filter(Boolean).map(esc).join(" · ");
+  return `<button class="rowi rowi--plain" type="button" data-client="${esc(c.id)}"><span class="avatar" data-s="${tone}">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${meta}</span></span><span class="end">${l.balance > 0 ? money(l.balance) : '<span class="pill green">Em dia</span>'}</span></button>`;
+}
+function fiadoMatches(e) {
+  const q = state.fiado.q.trim().toLowerCase();
+  if (!q) return true;
+  const c = clientOf(e);
+  return `${c.name} ${c.phone} ${e.productName}`.toLowerCase().includes(q);
+}
+const groupBlock = (title, total, inner) => `<div><div class="day-head"><h4>${title}</h4>${total !== null ? `<span class="label">${moneyTxt(total)}</span>` : ""}</div><div class="group">${inner}</div></div>`;
+function renderFiado() {
+  const f = state.fiado;
+  const open = openFiado();
+  const receivable = open.reduce((t, e) => t + num(e.balance), 0);
+  const overdue = open.filter((e) => e.status === "overdue");
+  const received = monthPayments().reduce((t, r) => t + num(r.pay.amount), 0);
+  $("#fiado-kpis").innerHTML = `
+    <button class="kpi" type="button" data-fiado-view="aberto" aria-pressed="${f.view === "aberto"}"><span class="label">A receber</span><span class="v">${moneyK(receivable)}</span></button>
+    <button class="kpi${overdue.length ? " alert" : ""}" type="button" data-fiado-view="cobrar" aria-pressed="${f.view === "cobrar"}"><span class="label">Vencidos</span><span class="v money">${overdue.length}</span></button>
+    <button class="kpi" type="button" data-fiado-view="recebidos" aria-pressed="${f.view === "recebidos"}"><span class="label">Recebido no mês</span><span class="v">${moneyK(received)}</span></button>`;
+  const views = [["cobrar", "Cobrar"], ["aberto", "Abertos"], ["recebidos", "Recebidos"], ["clientes", "Clientes"]];
+  $("#fiado-view").innerHTML = views.map(([id, l]) => `<button type="button" data-fiado-view="${id}" aria-pressed="${f.view === id}">${l}</button>`).join("");
+  $("#q-fiado").placeholder = f.view === "clientes" ? "Buscar cliente ou telefone" : "Buscar cliente ou peça";
+  const chips = $("#client-chips");
+  chips.hidden = f.view !== "clientes";
+  const box = $("#fiado-list");
+
+  if (f.view === "clientes") {
+    const withBalance = catalog.clients.filter((c) => clientLedger(c.id).balance > 0).length;
+    chips.innerHTML = [["open", `Com saldo`, withBalance], ["all", "Todos", catalog.clients.length], ["clear", "Sem saldo", catalog.clients.length - withBalance]].map(([id, l, n]) => `<button class="chip" type="button" data-client-filter="${id}" aria-pressed="${f.clients === id}">${l}<small>${n}</small></button>`).join("");
+    const q = f.q.trim().toLowerCase();
+    const list = catalog.clients.filter((c) => {
+      const bal = clientLedger(c.id).balance;
+      if (f.clients === "open" && bal <= 0) return false;
+      if (f.clients === "clear" && bal > 0) return false;
+      return !q || `${c.name} ${c.phone} ${c.address || ""} ${c.notes || ""}`.toLowerCase().includes(q);
+    }).sort((a, b) => clientLedger(b.id).balance - clientLedger(a.id).balance || a.name.localeCompare(b.name, "pt-BR"));
+    box.innerHTML = list.length ? `<div class="group">${list.map(rowClient).join("")}</div>` : `<div class="group"><p class="empty"><b>Nenhum cliente neste filtro</b>Use o botão Cliente para cadastrar.</p></div>`;
+    return;
+  }
+  if (f.view === "recebidos") {
+    const rows = monthPayments().filter((r) => fiadoMatches(r.entry));
+    box.innerHTML = rows.length ? groupBlock(`Recebido em ${MONTHS_LONG[new Date().getMonth()]} · ${rows.length}`, rows.reduce((t, r) => t + num(r.pay.amount), 0), rows.map(({ entry, pay }) => {
+      const c = clientOf(entry);
+      return `<button class="rowi rowi--plain" type="button" data-fiado="${esc(entry.id)}"><span class="avatar" data-s="paid">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${esc(entry.productName)} · ${fmtDate(pay.paidAt)}${pay.note ? ` · ${esc(pay.note)}` : ""}</span></span><span class="end">${money(pay.amount)}</span></button>`;
+    }).join("")) : `<div class="group"><p class="empty"><b>Nenhum abatimento neste mês</b>Os recebimentos aparecem aqui assim que forem registrados.</p></div>`;
+    return;
+  }
+  if (f.view === "aberto") {
+    const list = open.filter(fiadoMatches).sort((a, b) => num(b.balance) - num(a.balance));
+    box.innerHTML = list.length ? groupBlock(`Em aberto · ${list.length}`, list.reduce((t, e) => t + num(e.balance), 0), list.map(rowFiado).join("")) : `<div class="group"><p class="empty"><b>Nenhum saldo em aberto</b>Todos os fiados estão quitados.</p></div>`;
+    const paid = catalog.fiado.filter((e) => e.status === "paid" && fiadoMatches(e));
+    if (paid.length) box.innerHTML += groupBlock(`Quitados · ${paid.length}`, null, paid.slice(0, 30).map(rowFiado).join(""));
+    return;
+  }
+  const late = overdue.filter(fiadoMatches).sort((a, b) => daysLate(b) - daysLate(a));
+  const soon = open.filter(isDueSoon).filter(fiadoMatches);
+  const waiting = open.length - overdue.length - open.filter(isDueSoon).length;
+  let html = "";
+  if (late.length) html += groupBlock(`Vencidos · ${late.length}`, late.reduce((t, e) => t + num(e.balance), 0), late.map(rowFiado).join(""));
+  if (soon.length) html += groupBlock(`Vence em 7 dias · ${soon.length}`, soon.reduce((t, e) => t + num(e.balance), 0), soon.map(rowFiado).join(""));
+  if (!html) html = `<div class="group"><p class="empty"><b>Nada para cobrar agora</b>Nenhum vencido e nada vence nos próximos 7 dias.</p></div>`;
+  if (waiting > 0 && !f.q) html += `<button class="btn btn--ghost" type="button" data-fiado-view="aberto">${plural(waiting, "outro fiado em aberto", "outros fiados em aberto")} · ver saldos</button>`;
+  box.innerHTML = html;
+}
+
+// ---- vitrine ----
+const isNewLead = (p) => p.createdAt && Date.now() - new Date(p.createdAt).getTime() < 7 * 86400000;
+function slideMedia(b, cls) {
+  if (b.type === "video" && b.video) return `<video class="${cls}" src="${esc(b.video)}"${b.image ? ` poster="${esc(b.image)}"` : ""} muted loop playsinline autoplay preload="metadata"></video>`;
+  if (b.image) return `<img class="${cls}" src="${esc(b.image)}" alt="${esc(b.alt || b.title || "Banner")}" loading="lazy">`;
+  return `<span class="${cls} vid-ph">${icon("image")}<small>Sem mídia</small></span>`;
+}
+function heroPreviewHtml(b, i, total) {
+  return `<div class="hero-prev">${slideMedia(b, "hp-media")}${b.title ? `<span class="cap">${esc(b.title)}</span>` : ""}<span class="hp-dots">${Array.from({ length: total }, (_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("")}</span></div>`;
+}
+function renderHeroPreview() {
+  const box = $("#hero-live");
+  const list = catalog.banners;
+  if (!box) return;
+  if (!list.length) { box.innerHTML = `<div class="group"><p class="empty"><b>Sem banner</b>Sem slides, o banner some da loja.</p></div>`; return; }
+  state.heroIndex %= list.length;
+  box.innerHTML = heroPreviewHtml(list[state.heroIndex], state.heroIndex, list.length);
+}
+let heroTimer = null;
+function startHeroRotation() {
+  clearInterval(heroTimer);
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  heroTimer = setInterval(() => {
+    if (state.screen !== "vitrine" || document.hidden || catalog.banners.length < 2) return;
+    state.heroIndex += 1;
+    renderHeroPreview();
+  }, 4500);
+}
+function bannerRow(b, k) {
+  const n = catalog.banners.length;
+  return `<div class="rowi banner-row"><button class="row-main" type="button" data-slide="${k}">${slideMedia(b, "bthumb")}<span class="mid"><span class="name">${b.title ? esc(b.title) : '<span style="color:var(--muted)">Sem texto por cima</span>'}</span><span class="meta">${b.type === "video" ? "Vídeo" : "Foto"} · ${k + 1}º slide</span></span></button><span class="order-btns"><button type="button" data-move-slide="${k}" data-dir="-1" aria-label="Subir slide" ${k === 0 ? "disabled" : ""}>${icon("up", "i-xs")}</button><button type="button" data-move-slide="${k}" data-dir="1" aria-label="Descer slide" ${k === n - 1 ? "disabled" : ""}>${icon("down", "i-xs")}</button></span></div>`;
+}
+function rowOffer(p) {
+  const pct = hasSalePrice(p) ? Math.round((1 - num(p.priceMax) / num(p.priceList)) * 100) : 0;
+  return `<button class="rowi" type="button" data-offer="${esc(p.id)}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${hasSalePrice(p) ? `de <s>${moneyTxt(p.priceList)}</s> por <b style="color:var(--ink)">${moneyTxt(p.priceMax)}</b>` : `${moneyTxt(p.priceMax)} · selo SALE`}</span></span><span class="end">${pct ? `<span class="pill red">−${pct}%</span>` : '<span class="pill red">SALE</span>'}</span></button>`;
+}
+function renderVitrine() {
+  const offers = catalog.products.filter((p) => isPromo(p) && isAvailable(p));
+  const popup = catalog.promoPopup || {};
+  const enabled = popup.enabled !== false;
+  const leads = catalog.prospects.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const newLeads = leads.filter(isNewLead).length;
+  $("#vit-summary").innerHTML = `<span class="pill">${plural(catalog.banners.length, "slide", "slides")}</span><span class="pill ${offers.length ? "red" : ""}">${plural(offers.length, "oferta", "ofertas")}</span><span class="pill ${enabled ? "green" : ""}">Cupom ${enabled ? "ativo" : "desligado"}</span>`;
+  renderHeroPreview();
+  $("#vit-banners").innerHTML = catalog.banners.length ? catalog.banners.map(bannerRow).join("") : `<p class="empty"><b>Nenhum slide</b>Adicione uma foto ou vídeo para o topo da loja.</p>`;
+  $("#vit-offers").innerHTML = offers.length ? offers.map(rowOffer).join("") : `<p class="empty"><b>Nenhuma peça em oferta</b>A seção Promoções fica escondida na loja.</p>`;
+  $("#vit-popup").innerHTML = `<button class="popup-card" type="button" data-popup>${popup.image ? `<img src="${esc(popup.image)}" alt="">` : ""}<span class="mid"><b>${esc(popup.headline || "Pop-up do cupom")}</b><small>Cupom <b>${esc(popup.couponCode || "—")}</b>${popup.sellerPhone ? ` · WhatsApp ${esc(fmtPhone(popup.sellerPhone))}` : ""}</small></span>${icon("chev", "chev")}</button>
+    <div class="switch-row"><span><b>Mostrar ao abrir a loja</b><small>O visitante deixa nome e WhatsApp para ver o cupom</small></span><button class="switch" type="button" role="switch" aria-checked="${enabled}" data-popup-toggle aria-label="Mostrar pop-up do cupom"></button></div>`;
+  $("#vit-leads-count").textContent = newLeads ? plural(newLeads, "novo", "novos") : leads.length ? `${leads.length}` : "";
+  $("#vit-leads").innerHTML = leads.length ? leads.map((c) => {
+    const wa = whatsAppLink(c.phone, `Olá ${c.name.split(" ")[0]}, vi seu cadastro no cupom ${c.couponCode} da LB jewelry. Posso te ajudar a escolher uma peça?`);
+    return `<div class="rowi rowi--plain"><span class="avatar">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}${isNewLead(c) ? ' <span class="pill gold">Novo</span>' : ""}</span><span class="meta">${esc(fmtPhone(c.phone))} · ${fmtDate(c.createdAt)} · ${esc(c.couponCode || "")}</span></span>${wa ? `<a class="wa-btn" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="Chamar ${esc(c.name)} no WhatsApp">${icon("chat", "i-sm")}</a>` : ""}<button class="del-btn" type="button" data-del-lead="${esc(c.id)}" aria-label="Excluir contato ${esc(c.name)}">${icon("trash", "i-sm")}</button></div>`;
+  }).join("") : `<p class="empty"><b>Nenhum contato ainda</b>Quem pedir o cupom na loja aparece aqui.</p>`;
+}
+
+// ---------- painéis ----------
+function openSheet(title, body, foot = "", { back = null } = {}) {
+  $("#sheet-title").textContent = title;
+  $("#sheet-body").innerHTML = body;
+  $("#sheet-foot").innerHTML = foot;
+  $("#sheet-foot").hidden = !foot;
+  sheetError("");
+  sheetBack = back;
+  $("#sheet-back").hidden = !back;
+  $("#sheet-body").scrollTop = 0;
+  $("#scrim").classList.add("on");
+  const sheet = $("#sheet");
+  sheet.classList.add("on");
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+function closeSheet() {
+  $("#scrim")?.classList.remove("on");
+  const sheet = $("#sheet");
+  if (!sheet) return;
+  sheet.classList.remove("on");
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  sheetBack = null;
+  draft = null;
+}
+const sheetOpen = () => $("#sheet")?.classList.contains("on");
+function sheetError(message) {
+  const el = $("#sheet-error");
+  el.hidden = !message;
+  el.textContent = message || "";
+}
+let toastTimer;
+function toast(message, { error = false } = {}) {
+  const t = $("#toast");
+  t.innerHTML = `${error ? "" : icon("check", "i-sm")}${esc(message)}`;
+  t.classList.toggle("err", error);
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
+}
+async function busy(btn, fn, label = "Salvando…") {
+  const old = btn?.innerHTML;
+  if (btn) { btn.disabled = true; btn.textContent = label; }
+  sheetError("");
+  try {
+    return await fn();
+  } catch (error) {
+    if (error.status !== 401) { if (sheetOpen()) sheetError(error.message); else toast(error.message, { error: true }); }
+    return undefined;
+  } finally {
+    if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = old; }
+  }
+}
+const stepper = (id, value, min = 0, max = 999) => `<div class="stepper"><button type="button" data-step="${id}" data-d="-1" aria-label="Menos">−</button><input id="${id}" type="number" inputmode="numeric" min="${min}" max="${max}" step="1" value="${value}"><button type="button" data-step="${id}" data-d="1" aria-label="Mais">+</button></div>`;
+const segHtml = (name, options, current) => `<div class="seg" role="group" data-seg="${name}">${options.map(([v, l]) => `<button type="button" data-seg-value="${esc(v)}" aria-pressed="${v === current}">${esc(l)}</button>`).join("")}</div>`;
+const segValue = (name) => $(`[data-seg="${name}"] [aria-pressed="true"]`)?.dataset.segValue ?? "";
+
+// ---- nova ação ----
+function sheetNew() {
+  openSheet("Nova ação", `<div class="menu">
+    <button class="menu-item" type="button" data-open="sale"><span class="ic">${icon("bag")}</span><span><b>Registrar venda</b><small>À vista: PIX, dinheiro ou cartão</small></span></button>
+    <button class="menu-item" type="button" data-open="fiado-sale"><span class="ic">${icon("hand")}</span><span><b>Venda no fiado</b><small>Com entrada e vencimento</small></span></button>
+    <button class="menu-item" type="button" data-open="receive"><span class="ic">${icon("coin")}</span><span><b>Receber abatimento</b><small>Escolha o fiado e o valor</small></span></button>
+    <button class="menu-item" type="button" data-new-product><span class="ic">${icon("camera")}</span><span><b>Nova peça</b><small>Começa pelas fotos da vitrine</small></span></button>
+    <button class="menu-item" type="button" data-open="client"><span class="ic">${icon("user-plus")}</span><span><b>Novo cliente</b><small>Nome, telefone e endereço</small></span></button>
+  </div>`);
+}
+
+// ---- peça ----
+function sheetProduct(id) {
+  const p = productById(id);
+  if (!p) return closeSheet();
+  const photos = photosOf(p);
+  const missing = missingPhotos(p);
+  const margin = num(p.priceMin) - num(p.cost);
+  const pills = [`<span class="pill">${esc(p.category || "")}</span>`, p.showOnHome !== false ? '<span class="pill green">Na home</span>' : '<span class="pill">Fora da home</span>'];
+  if (p.active === false) pills.push('<span class="pill amber">Inativa</span>');
+  if (isPromo(p)) pills.push('<span class="pill red">Oferta</span>');
+  openSheet(p.name, `
+    <div class="prod-head">${thumbHtml(p)}<div class="stack-sm">${hasSalePrice(p) ? `<span class="hint"><s>${moneyTxt(p.priceList)}</s></span>` : ""}${money(p.priceMin)}${num(p.priceMax) !== num(p.priceMin) ? `<span class="hint">até ${moneyTxt(p.priceMax)}</span>` : ""}<div class="pills">${pills.join("")}</div></div></div>
+    <div class="facts"><div><span class="label">Estoque</span><b>${isAvailable(p) ? `${p.stock} un.` : "Vendida"}</b></div><div><span class="label">Custo</span><b>${num(p.cost) ? moneyTxt(p.cost) : "—"}</b></div><div><span class="label">Margem</span><b style="color:${margin >= 0 ? "var(--esmeralda)" : "var(--granada)"}">${num(p.cost) ? moneyTxt(margin) : "—"}</b></div></div>
+    <button class="photo-row" type="button" data-edit-product="${esc(p.id)}"><span><b>Fotos na loja · ${photos.length} de 3</b>${missing.length ? `<small class="warn">Falta: ${missing.join(" e ")}</small>` : `<small>Peça, mostruário${photos.length > 2 ? " e em uso" : ""}</small>`}</span><span class="mini-photos">${[0, 1, 2].map((k) => (photos[k] ? `<img src="${esc(photos[k])}" alt="">` : '<span class="gap"></span>')).join("")}</span></button>
+    <div class="actions">
+      <button class="act main" type="button" data-sell="${esc(p.id)}" ${isAvailable(p) ? "" : "disabled"}>${icon("bag")}Vender</button>
+      <button class="act" type="button" data-sell-fiado="${esc(p.id)}" ${isAvailable(p) ? "" : "disabled"}>${icon("hand")}Fiado</button>
+      <button class="act" type="button" data-edit-product="${esc(p.id)}">${icon("edit")}Editar</button>
+      <button class="act" type="button" data-restock="${esc(p.id)}">${icon("box")}Repor</button>
+    </div>
+    <div class="switch-row"><span><b>Mostrar na página principal</b><small>A peça aparece na home da loja</small></span><button class="switch" type="button" role="switch" aria-checked="${p.showOnHome !== false}" data-toggle-home="${esc(p.id)}" aria-label="Mostrar na página principal"></button></div>
+    ${p.description ? `<p class="hint">${esc(p.description)}</p>` : ""}
+    <button class="danger-link" type="button" data-delete-product="${esc(p.id)}">${icon("trash", "i-sm")}Excluir peça</button>`);
+}
+function sheetRestock(id) {
+  const p = productById(id);
+  openSheet("Repor estoque", `
+    <div class="picker">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">Hoje: ${isAvailable(p) ? `${p.stock} un.` : "vendida"}</span></span></div>
+    <div class="field"><span class="field-label">Unidades que chegaram</span>${stepper("rs-qty", 1, 1, 999)}</div>
+    <p class="hint">Para corrigir o estoque para menos, use Editar peça.</p>`,
+    `<button class="btn btn--ghost" type="button" data-product="${esc(p.id)}">Voltar</button><button class="btn btn--primary" type="button" data-save-restock="${esc(p.id)}">Repor</button>`, { back: () => sheetProduct(id) });
+}
+
+function sheetEditProduct(id) {
+  const p = productById(id) || null;
+  draft = {
+    id: p?.id || "", photos: [...photosOf(p)], cover: coverOf(p), uploading: 0, categorySlug: p?.categorySlug || "pulseiras",
+    badge: p?.badge || "", home: p ? p.showOnHome !== false : true, active: p ? p.active !== false : true, stockSeen: p ? num(p.stock) : null
+  };
+  const details = (p?.details || []).filter((d) => !/importado do vendafácil|venda importada/i.test(d)).join("\n");
+  openSheet(p ? "Editar peça" : "Nova peça", `
+    <div class="field">
+      <div class="ph-head"><span class="field-label">Fotos na loja</span><span class="hint" id="ph-count"></span></div>
+      <div class="slots" id="slots"></div>
+      <label class="upload" for="ph-input"><span class="ic">${icon("camera")}</span><span><b>${p ? "Adicionar ou trocar fotos" : "Comece pelas fotos"}</b><small>Câmera ou galeria · JPG, PNG ou WEBP até 5 MB</small></span></label>
+      <input class="vh" type="file" id="ph-input" accept="image/jpeg,image/png,image/webp" multiple>
+      <p class="hint">A página da peça mostra as fotos nesta ordem (seta ‹ muda a posição). A estrela escolhe a capa do cartão na vitrine.</p>
+    </div>
+    <label class="field"><span class="field-label">Nome da peça</span><input class="input" id="ed-name" value="${esc(p?.name || "")}" placeholder="Ex.: Pulseira cartier 4,5 g" maxlength="120"></label>
+    <div class="field"><span class="field-label">Categoria</span><div class="chips chips--wrap" data-pick="categorySlug">${CATEGORIES.map((c) => `<button class="chip" type="button" data-pick-value="${c.slug}" aria-pressed="${draft.categorySlug === c.slug}">${c.label}</button>`).join("")}</div></div>
+    <div class="two"><label class="field"><span class="field-label">Preço</span><input class="input money-in" id="ed-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><label class="field"><span class="field-label">Custo</span><input class="input money-in" id="ed-cost" inputmode="decimal" value="${moneyInput(p?.cost)}" placeholder="0"></label></div>
+    <p class="hint" id="ed-margin"></p>
+    <div class="two"><div class="field"><span class="field-label">Estoque</span>${stepper("ed-stock", p ? num(p.stock) : 1, 0, 999)}</div><label class="field"><span class="field-label">Código</span><input class="input" id="ed-sku" value="${esc(p?.sku || "")}" placeholder="SKU"></label></div>
+    <div class="field"><span class="field-label">Selo na foto</span>${segHtml("badge", [["", "Nenhum"], ["sale", "Sale"], ["new", "Lançamento"]], draft.badge)}</div>
+    <div class="switch-row"><span><b>Na página principal</b><small>Destaque na home da loja</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.home}" data-draft-switch="home" aria-label="Na página principal"></button></div>
+    <div class="switch-row"><span><b>Peça ativa</b><small>Desligada, some da loja sem apagar</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.active}" data-draft-switch="active" aria-label="Peça ativa"></button></div>
+    <label class="field"><span class="field-label">Descrição</span><textarea class="input" id="ed-desc" placeholder="Material, medidas, fecho">${esc(p?.description || "")}</textarea></label>
+    <details class="more"${p && (num(p.priceMax) !== num(p.priceMin) || hasSalePrice(p)) ? " open" : ""}><summary>Mais detalhes</summary><div class="more-body">
+      <div class="two"><label class="field"><span class="field-label">Preço máximo</span><input class="input" id="ed-pmax" inputmode="decimal" value="${p && num(p.priceMax) !== num(p.priceMin) ? moneyInput(p.priceMax) : ""}" placeholder="Se variar"></label><label class="field"><span class="field-label">Preço riscado</span><input class="input" id="ed-plist" inputmode="decimal" value="${moneyInput(p?.priceList)}" placeholder="Preço de antes"></label></div>
+      <label class="field"><span class="field-label">Coleção</span><input class="input" id="ed-collection" value="${esc(p?.collection || "")}" placeholder="Coleção ${esc(CATEGORIES.find((c) => c.slug === draft.categorySlug)?.label || "")}"></label>
+      <label class="field"><span class="field-label">Variantes (separadas por vírgula)</span><input class="input" id="ed-variants" value="${esc((p?.thickness || []).filter((t) => t !== "Único").join(", "))}" placeholder="Ex.: 4 mm, 6 mm"></label>
+      <label class="field"><span class="field-label">Detalhes (um por linha)</span><textarea class="input" id="ed-details" placeholder="Ouro 18k&#10;45 cm">${esc(details)}</textarea></label>
+    </div></details>
+    ${p ? `<button class="danger-link" type="button" data-delete-product="${esc(p.id)}">${icon("trash", "i-sm")}Excluir peça</button>` : ""}`,
+    `<button class="btn btn--ghost" type="button" ${p ? `data-product="${esc(p.id)}"` : "data-close"}>Cancelar</button><button class="btn btn--primary" type="button" data-save-product>${p ? "Salvar alterações" : "Cadastrar peça"}</button>`,
+    { back: p ? () => sheetProduct(p.id) : null });
+  renderSlots();
+  updateMargin();
+  $("#ed-price").addEventListener("input", updateMargin);
+  $("#ed-cost").addEventListener("input", updateMargin);
+  $("#ph-input").addEventListener("change", onPhotoFiles);
+}
+function updateMargin() {
+  const price = parseMoney($("#ed-price")?.value);
+  const cost = parseMoney($("#ed-cost")?.value);
+  const el = $("#ed-margin");
+  if (!el) return;
+  el.innerHTML = price > 0 && cost > 0 ? `Margem <b class="${price - cost < 0 ? "neg" : ""}">${moneyTxt(price - cost)}</b> · ${Math.round((price - cost) / price * 100)}%` : "";
+}
+function renderSlots() {
+  if (!draft || !$("#slots")) return;
+  const ph = draft.photos;
+  if (!ph.includes(draft.cover)) draft.cover = ph[0] || "";
+  const filled = ph.map((src, k) => {
+    const [n] = PHOTO_SLOTS[k] || [`Foto ${k + 1}`];
+    const isCover = src === draft.cover;
+    return `<figure class="slot${isCover ? " cover" : ""}"><img src="${esc(src)}" alt="${n}"><figcaption><b>${n}</b><small>${isCover ? "Capa da vitrine" : k === 0 ? "1ª da página" : `${k + 1}ª foto`}</small></figcaption><span class="slot-acts">${k ? `<button type="button" data-ph-left="${k}" aria-label="Mover para a esquerda" title="Mover para a esquerda">${icon("back", "i-xs")}</button>` : ""}${isCover ? "" : `<button type="button" data-ph-cover="${k}" aria-label="Usar como capa da vitrine" title="Usar como capa da vitrine">${icon("star", "i-xs")}</button>`}<button type="button" data-ph-remove="${k}" aria-label="Remover foto" title="Remover">${icon("x", "i-xs")}</button></span></figure>`;
+  });
+  const busySlots = Array.from({ length: draft.uploading }, () => `<div class="slot busy">Enviando…</div>`);
+  const empty = PHOTO_SLOTS.slice(ph.length + draft.uploading).map(([n, d]) => `<label class="slot empty" for="ph-input">${icon("camera")}<b>${n}</b><small>${d} · adicionar</small></label>`);
+  $("#slots").innerHTML = filled.concat(busySlots, empty).join("");
+  $("#ph-count").textContent = `${ph.length} ${ph.length === 1 ? "foto" : "fotos"}`;
+}
+async function onPhotoFiles(event) {
+  const files = [...event.target.files];
+  event.target.value = "";
+  const valid = files.filter((f) => /image\/(jpeg|png|webp)/.test(guessUploadMime(f)));
+  if (valid.length < files.length) sheetError("Algumas fotos foram ignoradas: envie JPG, PNG ou WEBP.");
+  const d = draft;
+  for (const file of valid) {
+    if (file.size > 5 * 1024 * 1024) { sheetError(`A foto ${file.name} tem ${fileSize(file.size)}. O máximo é 5 MB.`); continue; }
+    d.uploading += 1;
+    renderSlots();
+    try {
+      const up = await uploadFile(file);
+      d.photos.push(up.url);
+    } catch (error) {
+      sheetError(error.message);
+    } finally {
+      d.uploading -= 1;
+      if (draft === d) renderSlots();
+    }
+  }
+}
+async function saveProduct(btn) {
+  const d = draft;
+  if (d.uploading) return sheetError("Espere as fotos terminarem de enviar.");
+  if (!d.photos.length) return sheetError("Adicione ao menos a foto da peça: ela é a capa na loja.");
+  const name = $("#ed-name").value.trim();
+  if (!name) { $("#ed-name").focus(); return sheetError("Dê um nome à peça."); }
+  const price = parseMoney($("#ed-price").value);
+  if (!(price >= 0) || Number.isNaN(price)) return sheetError("Preço inválido. Use números, como 1.250 ou 1.250,50.");
+  const cost = parseMoney($("#ed-cost").value);
+  const pmax = parseMoney($("#ed-pmax").value);
+  const plist = parseMoney($("#ed-plist").value);
+  if ([cost, pmax, plist].some(Number.isNaN)) return sheetError("Confira os valores: use números, como 1.250 ou 1.250,50.");
+  const existing = productById(d.id);
+  const variants = $("#ed-variants").value.split(",").map((s) => s.trim()).filter(Boolean);
+  const details = $("#ed-details").value.split("\n").map((s) => s.trim()).filter(Boolean);
+  const payload = {
+    name, categorySlug: d.categorySlug, collection: $("#ed-collection").value.trim(), sku: $("#ed-sku").value.trim(),
+    badge: segValue("badge"), priceMin: price, priceMax: pmax > price ? pmax : price, priceList: plist > 0 ? plist : "",
+    cost, stock: Math.max(0, Math.floor(num($("#ed-stock").value))), showOnHome: d.home, active: d.active,
+    image: d.photos.includes(d.cover) ? d.cover : d.photos[0], images: d.photos, thickness: variants.length ? variants : ["Único"],
+    details: details.length ? details : (existing?.details || []), description: $("#ed-desc").value.trim()
+  };
+  if (existing) payload.stockSeen = d.stockSeen;
+  await busy(btn, async () => {
+    const saved = await request(existing ? `/api/admin/products/${encodeURIComponent(existing.id)}` : "/api/admin/products", { method: existing ? "PUT" : "POST", body: JSON.stringify(payload) });
+    await loadCatalog();
+    toast(existing ? "Peça salva" : "Peça cadastrada");
+    sheetProduct(saved.id || existing?.id);
   });
 }
 
-async function persistBanners() {
-  const bannerError = document.getElementById("banner-error");
-  const bannerOk = document.getElementById("banner-ok");
-  const saveBtn = document.getElementById("save-banners-btn");
-  showError(bannerError, "");
-  bannerOk.hidden = true;
-  catalog.banners = collectBanners();
-  catalog.promoPopup = collectPromoPopup();
-  saveBtn.disabled = true;
-  try {
-    const data = await request("/api/admin/banners", {
-      method: "PUT",
-      body: JSON.stringify({ banners: catalog.banners, promoPopup: catalog.promoPopup })
-    });
-    catalog.banners = data.banners;
-    catalog.promoPopup = data.promoPopup || catalog.promoPopup;
-    renderBanners();
-    renderPromoPopupSettings();
-    bannerOk.hidden = false;
-    bannerOk.textContent = "Banners e cupom salvos. Atualize a home (Ctrl+F5) para ver a troca.";
-  } catch (error) {
-    showError(bannerError, error.message);
-  } finally {
-    saveBtn.disabled = false;
-  }
+// ---- venda e fiado ----
+function productPickerHtml(selectedId, prefix) {
+  const p = productById(selectedId);
+  if (p) return `<button class="picker" type="button" data-repick="${prefix}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${p.stock} un. em estoque${num(p.cost) ? ` · custo ${moneyTxt(p.cost)}` : ""}</span></span><span class="pill">Trocar</span></button>`;
+  return `<div class="stack-sm"><label class="search">${icon("search")}<input id="${prefix}-q" type="search" placeholder="Buscar peça para vender" autocomplete="off" aria-label="Buscar peça"></label><div class="group" id="${prefix}-list"></div></div>`;
+}
+function fillProductPick(prefix) {
+  const list = $(`#${prefix}-list`);
+  if (!list) return;
+  const q = ($(`#${prefix}-q`)?.value || "").trim().toLowerCase();
+  const all = catalog.products.filter((p) => isAvailable(p) && (!q || `${p.name} ${p.sku || ""} ${p.category}`.toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const items = all.slice(0, 8);
+  const more = all.length - items.length;
+  list.innerHTML = (items.length ? items.map((p) => `<button class="rowi" type="button" data-pick-product="${esc(p.id)}" data-prefix="${prefix}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${esc(p.category)} · ${p.stock} un.</span></span><span class="end">${money(p.priceMin)}</span></button>`).join("") : `<p class="empty">Nenhuma peça disponível com esse nome.</p>`) + (more > 0 ? `<p class="pick-more">Mais ${plural(more, "peça", "peças")}: digite o nome para filtrar</p>` : "");
+}
+function sheetSale(productId = "") {
+  draft = { kind: "sale", productId };
+  const p = productById(productId);
+  openSheet("Registrar venda", `
+    <div class="field"><span class="field-label">Peça</span><div id="sale-picker">${productPickerHtml(productId, "sp")}</div></div>
+    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
+    <p class="hint" id="sale-margin"></p>
+    <div class="field"><span class="field-label">Pagamento</span>${segHtml("pay", [...PAYMENT_METHODS.map((m) => [m, m]), ["", "Outro"]], "PIX")}</div>`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--gold" type="button" data-save-sale>Confirmar venda</button>`,
+    { back: productId ? () => sheetProduct(productId) : null });
+  bindSaleForm("sp");
+}
+function bindSaleForm(prefix) {
+  $(`#${prefix}-q`)?.addEventListener("input", () => fillProductPick(prefix));
+  fillProductPick(prefix);
+  const update = () => {
+    const p = productById(draft?.productId);
+    const el = $("#sale-margin");
+    if (!el) return;
+    const price = parseMoney($("#sale-price").value);
+    const qty = Math.max(1, num($("#sale-qty").value));
+    if (!p || !(price > 0)) { el.innerHTML = ""; return; }
+    const parts = [`Total <b style="color:var(--ink)">${moneyTxt(price * qty)}</b>`];
+    if (num(p.cost)) parts.push(`margem <b class="${price - num(p.cost) < 0 ? "neg" : ""}">${moneyTxt((price - num(p.cost)) * qty)}</b> (${Math.round((price - num(p.cost)) / price * 100)}%)`);
+    el.innerHTML = parts.join(" · ");
+  };
+  $("#sale-price")?.addEventListener("input", update);
+  $("#sale-qty")?.addEventListener("input", update);
+  draft.updateTotals = update;
+  update();
+}
+function pickProduct(id, prefix) {
+  const p = productById(id);
+  draft.productId = id;
+  $(prefix === "sp" ? "#sale-picker" : "#fs-picker").innerHTML = productPickerHtml(id, prefix);
+  $("#sale-price").value = moneyInput(p.priceMin);
+  const qty = $("#sale-qty");
+  qty.max = p.stock;
+  if (num(qty.value) > num(p.stock)) qty.value = p.stock;
+  draft.updateTotals?.();
+}
+async function saveSale(btn) {
+  const p = productById(draft.productId);
+  if (!p) return sheetError("Escolha a peça vendida.");
+  const unitPrice = parseMoney($("#sale-price").value);
+  const quantity = Math.floor(num($("#sale-qty").value));
+  if (!(unitPrice > 0)) return sheetError("Informe o valor da venda.");
+  if (quantity < 1) return sheetError("Informe a quantidade.");
+  if (quantity > num(p.stock)) return sheetError(`Estoque insuficiente: há ${p.stock} un.`);
+  await busy(btn, async () => {
+    await request("/api/admin/sales", { method: "POST", body: JSON.stringify({ productId: p.id, quantity, unitPrice, paymentMethod: segValue("pay") }) });
+    await loadCatalog();
+    closeSheet();
+    toast(`Venda de ${moneyTxt(unitPrice * quantity)} registrada`);
+  });
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  showError(loginError, "");
-  const submitBtn = loginForm.querySelector("button[type='submit']");
-  submitBtn.disabled = true;
-  const form = new FormData(loginForm);
-  try {
-    await request("/api/admin/login", {
-      method: "POST",
-      body: JSON.stringify({
-        user: String(form.get("user") || "").trim(),
-        password: String(form.get("password") || "")
-      })
-    });
-  } catch (error) {
-    showError(loginError, error.message);
-    return;
-  } finally {
-    submitBtn.disabled = false;
+function clientPickerHtml(clientId) {
+  const c = catalog.clients.find((x) => x.id === clientId);
+  if (c) {
+    const l = clientLedger(c.id);
+    return `<button class="picker" type="button" data-repick-client><span class="avatar">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${esc(fmtPhone(c.phone))}${l.balance > 0 ? ` · deve ${moneyTxt(l.balance)}` : ""}</span></span><span class="pill">Trocar</span></button>`;
   }
-  await enterPanel();
+  if (draft?.newClient) {
+    return `<div class="stack-sm"><div class="two"><label class="field"><span class="field-label">Nome</span><input class="input" id="nc-name" placeholder="Nome do cliente"></label><label class="field"><span class="field-label">Telefone</span><input class="input" id="nc-phone" inputmode="tel" placeholder="(48) 99999-9999"></label></div><button class="danger-link" style="color:var(--gold)" type="button" data-repick-client>Escolher cliente cadastrado</button></div>`;
+  }
+  return `<div class="stack-sm"><label class="search">${icon("search")}<input id="cp-q" type="search" placeholder="Buscar cliente" autocomplete="off" aria-label="Buscar cliente"></label><div class="group" id="cp-list"></div></div>`;
+}
+function fillClientPick() {
+  const list = $("#cp-list");
+  if (!list) return;
+  const q = ($("#cp-q")?.value || "").trim().toLowerCase();
+  const all = catalog.clients.filter((c) => !q || `${c.name} ${c.phone}`.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const items = all.slice(0, 7);
+  list.innerHTML = `<button class="rowi rowi--plain" type="button" data-new-client-inline><span class="avatar">${icon("user-plus", "i-sm")}</span><span class="mid"><span class="name">Cadastrar cliente novo</span><span class="meta">Nome e telefone</span></span></button>`
+    + items.map((c) => `<button class="rowi rowi--plain" type="button" data-pick-client="${esc(c.id)}"><span class="avatar">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${esc(fmtPhone(c.phone))}</span></span></button>`).join("")
+    + (all.length > items.length ? `<p class="pick-more">Mais ${plural(all.length - items.length, "cliente", "clientes")}: digite o nome para filtrar</p>` : "");
+}
+function renderClientPicker() {
+  $("#fs-client").innerHTML = clientPickerHtml(draft.clientId);
+  $("#cp-q")?.addEventListener("input", fillClientPick);
+  fillClientPick();
+}
+function sheetFiadoSale(productId = "", clientId = "") {
+  draft = { kind: "fiado", productId, clientId, newClient: false };
+  const p = productById(productId);
+  openSheet("Venda no fiado", `
+    <div class="field"><span class="field-label">Cliente</span><div id="fs-client"></div></div>
+    <div class="field"><span class="field-label">Peça</span><div id="fs-picker">${productPickerHtml(productId, "fp")}</div></div>
+    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
+    <p class="hint" id="sale-margin"></p>
+    <div class="two"><label class="field"><span class="field-label">Entrada</span><input class="input money-in" id="fs-entry" inputmode="decimal" placeholder="0"></label><label class="field"><span class="field-label">1º vencimento</span><input class="input" id="fs-due" type="date" value="${addDays(localISO(), 30)}"></label></div>
+    <div class="field"><span class="field-label">Entrada paga em</span>${segHtml("pay", [...PAYMENT_METHODS.map((m) => [m, m]), ["", "Outro"]], "PIX")}</div>
+    <div class="two"><label class="field"><span class="field-label">Parcela (opcional)</span><input class="input" id="fs-inst" inputmode="decimal" placeholder="Ex.: 500"></label><label class="field"><span class="field-label">Observação</span><input class="input" id="fs-notes" placeholder="Ex.: paga todo dia 10"></label></div>`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--gold" type="button" data-save-fiado-sale>Registrar fiado</button>`,
+    { back: productId ? () => sheetProduct(productId) : null });
+  renderClientPicker();
+  bindSaleForm("fp");
+}
+async function saveFiadoSale(btn) {
+  const p = productById(draft.productId);
+  if (!p) return sheetError("Escolha a peça.");
+  const unitPrice = parseMoney($("#sale-price").value);
+  const quantity = Math.floor(num($("#sale-qty").value));
+  const downPayment = parseMoney($("#fs-entry").value) || 0;
+  const installmentAmount = parseMoney($("#fs-inst").value) || 0;
+  const nextDueDate = $("#fs-due").value;
+  if (!(unitPrice > 0)) return sheetError("Informe o valor da venda.");
+  if (quantity < 1 || quantity > num(p.stock)) return sheetError(`Quantidade inválida: há ${p.stock} un.`);
+  if (Number.isNaN(downPayment) || downPayment > unitPrice * quantity) return sheetError("A entrada não pode ser maior que o total.");
+  if (downPayment < unitPrice * quantity && !nextDueDate) return sheetError("Informe a data do primeiro vencimento.");
+  let clientId = draft.clientId;
+  const newName = $("#nc-name")?.value.trim();
+  const newPhone = $("#nc-phone")?.value.trim();
+  if (!clientId && !draft.newClient) return sheetError("Escolha o cliente ou cadastre um novo.");
+  if (!clientId && (!newName || phoneDigits(newPhone).length < 10)) return sheetError("Informe nome e telefone com DDD do cliente novo.");
+  await busy(btn, async () => {
+    if (!clientId) {
+      const c = await request("/api/admin/clients", { method: "POST", body: JSON.stringify({ name: newName, phone: newPhone }) });
+      clientId = c.id;
+      draft.clientId = clientId;
+      draft.newClient = false;
+    }
+    const res = await request("/api/admin/fiado", { method: "POST", body: JSON.stringify({ clientId, productId: p.id, quantity, unitPrice, downPayment, nextDueDate, installmentAmount, notes: $("#fs-notes").value.trim(), paymentMethod: segValue("pay") }) });
+    await loadCatalog();
+    toast("Fiado registrado");
+    sheetFiado(res.fiado.id);
+  });
+}
+
+function sheetFiado(id) {
+  const e = catalog.fiado.find((x) => x.id === id);
+  if (!e) return closeSheet();
+  const c = clientOf(e);
+  const open = e.status !== "paid";
+  const wa = whatsAppLink(c.phone, collectMessage(e));
+  const pays = (e.payments || []).slice().sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)));
+  const quick = [];
+  if (num(e.installmentAmount) && num(e.installmentAmount) < num(e.balance)) quick.push([e.installmentAmount, `Parcela ${moneyTxt(e.installmentAmount)}`]);
+  [100, 200, 500].filter((v) => v < num(e.balance)).forEach((v) => quick.push([v, moneyTxt(v)]));
+  quick.push([e.balance, `Quitar ${moneyTxt(e.balance)}`]);
+  const tone = fiadoTone(e);
+  openSheet(c.name, `
+    <div class="facts"><div><span class="label">Total</span><b>${moneyTxt(e.total)}</b></div><div><span class="label">Pago</span><b>${moneyTxt(e.paid)}</b></div><div><span class="label">Saldo</span><b style="color:${tone === "overdue" ? "var(--granada)" : tone === "paid" ? "var(--esmeralda)" : "var(--ink)"}">${moneyTxt(e.balance)}</b></div></div>
+    <button class="picker" type="button" data-client="${esc(c.id)}"><span class="avatar" data-s="${tone}">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(e.productName)}${num(e.quantity) > 1 ? ` · ${e.quantity} un.` : ""}</span><span class="meta">${[fmtPhone(c.phone), open ? (e.nextDueDate ? `${e.status === "overdue" ? "venceu" : "vence"} ${fmtDateFull(e.nextDueDate)}` : "sem vencimento") : "quitado", num(e.installmentAmount) ? `parcela ${moneyTxt(e.installmentAmount)}` : ""].filter(Boolean).map(esc).join(" · ")}</span></span>${icon("chev", "chev")}</button>
+    ${e.notes ? `<p class="hint">${esc(e.notes)}</p>` : ""}
+    ${open ? `
+      <div class="field"><span class="field-label">Registrar abatimento</span>
+        <input class="input money-in" id="ab-val" inputmode="decimal" placeholder="Valor recebido">
+        <div class="quick">${quick.map(([v, l]) => `<button class="chip" type="button" data-amount="${v}">${esc(l)}</button>`).join("")}</div>
+      </div>
+      <div class="field"><span class="field-label">Recebido em</span>${segHtml("abpay", PAYMENT_METHODS.map((m) => [m, m]), "PIX")}</div>
+      <label class="field"><span class="field-label">Próximo vencimento (se sobrar saldo)</span><input class="input" id="ab-due" type="date" value="${e.nextDueDate && e.nextDueDate >= localISO() ? e.nextDueDate : addDays(localISO(), 30)}"></label>
+      <div class="field"><span class="field-label">Mensagem de cobrança</span><div class="wa-preview">${esc(collectMessage(e))}</div>${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "i-sm")}Cobrar no WhatsApp</a>` : `<p class="hint">Cadastre o telefone do cliente para cobrar pelo WhatsApp.</p>`}</div>` : ""}
+    <div class="field"><span class="field-label">Abatimentos · ${pays.length}</span>${pays.length ? `<div class="history">${pays.map((pay) => `<div><span>${fmtDateFull(pay.paidAt)}${pay.note ? ` · ${esc(pay.note)}` : ""}</span><b>${moneyTxt(pay.amount)}</b></div>`).join("")}</div>` : `<p class="hint">Nenhum abatimento ainda.</p>`}</div>
+    <p class="hint">Venda em ${fmtDateFull(e.createdAt)}${e.paymentMethod ? ` · entrada em ${esc(e.paymentMethod)}` : ""}${num(e.unitCost) ? ` · custo ${moneyTxt(num(e.unitCost) * num(e.quantity || 1))}` : ""}</p>`,
+    open ? `<button class="btn btn--ghost" type="button" data-edit-fiado="${esc(e.id)}">Editar</button><button class="btn btn--gold" type="button" data-save-payment="${esc(e.id)}">Registrar abatimento</button>`
+      : `<button class="btn btn--ghost" type="button" data-close>Fechar</button><button class="btn btn--primary" type="button" data-edit-fiado="${esc(e.id)}">Editar fiado</button>`);
+}
+async function savePayment(btn, id) {
+  const e = catalog.fiado.find((x) => x.id === id);
+  const amount = parseMoney($("#ab-val").value);
+  if (!(amount > 0)) { $("#ab-val").focus(); return sheetError("Informe o valor recebido."); }
+  if (amount > num(e.balance) + 0.009) return sheetError(`O valor passa do saldo de ${moneyTxt(e.balance)}.`);
+  const nextDueDate = $("#ab-due").value;
+  if (amount < num(e.balance) && !nextDueDate) return sheetError("Informe o próximo vencimento.");
+  await busy(btn, async () => {
+    const updated = await request(`/api/admin/fiado/${encodeURIComponent(id)}/payments`, { method: "POST", body: JSON.stringify({ amount, nextDueDate, note: segValue("abpay") || "Abatimento" }) });
+    await loadCatalog();
+    toast(updated.status === "paid" ? "Fiado quitado" : `Abatimento de ${moneyTxt(amount)} registrado`);
+    sheetFiado(id);
+  });
+}
+function payRowHtml(pay = {}) {
+  const date = pay.paidAt ? localISO(pay.paidAt) : localISO();
+  return `<div class="pay-row" data-pay-row data-id="${esc(pay.id || "")}"><label class="field"><span class="field-label">Data</span><input class="input" type="date" data-f="paidAt" value="${date}"></label><label class="field"><span class="field-label">Valor</span><input class="input" inputmode="decimal" data-f="amount" value="${moneyInput(pay.amount)}" placeholder="0"></label><label class="field pay-note"><span class="field-label">Observação</span><input class="input" data-f="note" value="${esc(pay.note || "")}" placeholder="Ex.: PIX"></label><button class="x" type="button" data-remove-pay aria-label="Remover abatimento">${icon("trash", "i-sm")}</button></div>`;
+}
+function sheetEditFiado(id) {
+  const e = catalog.fiado.find((x) => x.id === id);
+  const c = clientOf(e);
+  draft = { kind: "edit-fiado", id, expected: (e.payments || []).map((p) => p.id) };
+  openSheet("Editar fiado", `
+    <p class="hint"><b style="color:var(--ink)">${esc(c.name)}</b> · ${esc(e.productName)}</p>
+    <div class="two"><div class="field"><span class="field-label">Quantidade</span>${stepper("ef-qty", e.quantity || 1, 1, 99)}</div><label class="field"><span class="field-label">Valor (cada)</span><input class="input" id="ef-price" inputmode="decimal" value="${moneyInput(e.unitPrice)}"></label></div>
+    <div class="two"><label class="field"><span class="field-label">Parcela</span><input class="input" id="ef-inst" inputmode="decimal" value="${moneyInput(e.installmentAmount)}" placeholder="Opcional"></label><label class="field"><span class="field-label">Próximo vencimento</span><input class="input" id="ef-due" type="date" value="${e.nextDueDate || ""}"></label></div>
+    <label class="field"><span class="field-label">Observação</span><input class="input" id="ef-notes" value="${esc(e.notes || "")}" placeholder="Ex.: paga todo dia 10"></label>
+    <div class="field"><div class="ph-head"><span class="field-label">Abatimentos</span><button class="danger-link" style="color:var(--gold);padding:0" type="button" data-add-pay>+ Adicionar</button></div><div class="stack-sm" id="ef-pays">${(e.payments || []).map(payRowHtml).join("") || '<p class="hint" data-no-pays>Nenhum abatimento registrado.</p>'}</div><p class="hint">Corrija valores, datas ou remova lançamentos errados.</p></div>
+    <div class="totals" id="ef-totals"></div>`,
+    `<button class="btn btn--ghost" type="button" data-fiado="${esc(id)}">Cancelar</button><button class="btn btn--primary" type="button" data-save-edit-fiado="${esc(id)}">Salvar alterações</button>`,
+    { back: () => sheetFiado(id) });
+  updateFiadoTotals();
+}
+function collectPays() {
+  return $$("#ef-pays [data-pay-row]").map((row) => ({ id: row.dataset.id, paidAt: $('[data-f="paidAt"]', row).value, amount: parseMoney($('[data-f="amount"]', row).value), note: $('[data-f="note"]', row).value.trim() }));
+}
+function updateFiadoTotals() {
+  const el = $("#ef-totals");
+  if (!el) return;
+  const total = Math.max(1, num($("#ef-qty").value)) * (parseMoney($("#ef-price").value) || 0);
+  const paid = collectPays().reduce((t, p) => t + (num(p.amount) || 0), 0);
+  el.innerHTML = `<span>Total <b>${moneyTxt(total)}</b></span><span>Pago <b>${moneyTxt(paid)}</b></span><span>Saldo <b style="color:${total - paid < 0 ? "var(--granada)" : "var(--ink)"}">${moneyTxt(Math.max(0, total - paid))}</b></span>`;
+}
+async function saveEditFiado(btn, id) {
+  const pays = collectPays();
+  if (pays.some((p) => !(p.amount > 0))) return sheetError("Cada abatimento precisa de um valor maior que zero.");
+  const unitPrice = parseMoney($("#ef-price").value);
+  if (!(unitPrice >= 0)) return sheetError("Valor inválido.");
+  await busy(btn, async () => {
+    await request(`/api/admin/fiado/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({
+      quantity: Math.max(1, Math.floor(num($("#ef-qty").value))), unitPrice, installmentAmount: parseMoney($("#ef-inst").value) || 0,
+      nextDueDate: $("#ef-due").value, notes: $("#ef-notes").value.trim(),
+      payments: pays.map((p) => ({ ...(p.id ? { id: p.id } : {}), paidAt: p.paidAt, amount: p.amount, note: p.note })), expectedPaymentIds: draft.expected
+    }) });
+    await loadCatalog();
+    toast("Fiado atualizado");
+    sheetFiado(id);
+  });
+}
+
+function sheetClient(id = "") {
+  const c = catalog.clients.find((x) => x.id === id);
+  const l = c ? clientLedger(c.id) : null;
+  const wa = c ? whatsAppLink(c.phone, l.balance > 0 ? `Olá ${c.name.split(" ")[0]}, tudo bem?\nSeu saldo em aberto na LB jewelry é ${moneyTxt(l.balance)}.` : `Olá ${c.name.split(" ")[0]}, tudo bem?`) : "";
+  openSheet(c ? c.name : "Novo cliente", `
+    ${c ? `<div class="facts"><div><span class="label">Saldo</span><b style="color:${l.overdue ? "var(--granada)" : "var(--ink)"}">${moneyTxt(l.balance)}</b></div><div><span class="label">Fiados</span><b>${l.entries.length}</b></div><div><span class="label">Próximo</span><b>${l.nextDue ? fmtDate(l.nextDue) : "—"}</b></div></div>
+    ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "i-sm")}Chamar no WhatsApp</a>` : ""}` : ""}
+    <label class="field"><span class="field-label">Nome</span><input class="input" id="cl-name" value="${esc(c?.name || "")}" placeholder="Nome completo"></label>
+    <label class="field"><span class="field-label">Telefone</span><input class="input" id="cl-phone" inputmode="tel" value="${esc(c?.phone || "")}" placeholder="(48) 99999-9999"></label>
+    <label class="field"><span class="field-label">Endereço</span><input class="input" id="cl-address" value="${esc(c?.address || "")}" placeholder="Rua, bairro, cidade"></label>
+    <label class="field"><span class="field-label">Anotações</span><textarea class="input" id="cl-notes" placeholder="Preferências, combinados de pagamento">${esc(c?.notes || "")}</textarea></label>
+    ${c && l.entries.length ? `<div class="field"><span class="field-label">Fiados</span><div class="group">${l.entries.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(rowFiado).join("")}</div></div>` : ""}
+    ${c ? `<button class="act" style="justify-items:start;grid-auto-flow:column;justify-content:start;padding:12px 14px" type="button" data-new-fiado-client="${esc(c.id)}">${icon("hand")}Nova venda no fiado para ${esc(c.name.split(" ")[0])}</button>
+    <button class="danger-link" type="button" data-delete-client="${esc(c.id)}">${icon("trash", "i-sm")}Excluir cliente</button>` : ""}`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--primary" type="button" data-save-client="${esc(c?.id || "")}">${c ? "Salvar cliente" : "Cadastrar cliente"}</button>`);
+}
+async function saveClient(btn, id) {
+  const name = $("#cl-name").value.trim();
+  const phone = $("#cl-phone").value.trim();
+  if (!name) return sheetError("Informe o nome do cliente.");
+  if (phoneDigits(phone).length < 10) return sheetError("Informe o telefone com DDD.");
+  const existing = catalog.clients.find((x) => x.id === id);
+  await busy(btn, async () => {
+    const saved = await request(existing ? `/api/admin/clients/${encodeURIComponent(id)}` : "/api/admin/clients", { method: existing ? "PUT" : "POST", body: JSON.stringify({ name, phone, address: $("#cl-address").value.trim(), notes: $("#cl-notes").value.trim(), createdAt: existing?.createdAt }) });
+    await loadCatalog();
+    toast(existing ? "Cliente salvo" : "Cliente cadastrado");
+    sheetClient(saved.id);
+  });
+}
+
+function sheetSaleDetail(id) {
+  const s = catalog.sales.find((x) => x.id === id);
+  if (!s) return closeSheet();
+  const p = productById(s.productId);
+  const k = saleKind(s);
+  const rev = saleRevenue(s);
+  const cost = saleCost(s);
+  const rows = [["Data", `${fmtDateFull(s.createdAt)} ${fmtTime(s.createdAt)}`], ["Tipo", k.label]];
+  const who = s.clientName || (s.clientId ? clientOf(s).name : "");
+  if (who) rows.push(["Cliente", who]);
+  if (s.type !== "fiado_payment") rows.push(["Quantidade", `${s.quantity} × ${moneyTxt(s.unitPrice)}`], ["Total da venda", moneyTxt(s.total)]);
+  if (s.type === "fiado") rows.push(["Entrada", moneyTxt(s.paidAtSale)]);
+  if (s.paymentMethod && s.type !== "cash") rows.push(["Pagamento", s.paymentMethod]);
+  if (cost) rows.push(["Custo", moneyTxt(cost)], ["Margem", moneyTxt(num(s.total) - cost)]);
+  if (s.notes) rows.push(["Observação", s.notes]);
+  openSheet(s.productName || "Recebimento", `
+    <div class="prod-head">${thumbHtml(p || { name: s.productName })}<div class="stack-sm">${money(rev)}<div class="pills"><span class="pill ${k.cls}">${esc(k.label)}</span></div></div></div>
+    <div class="history">${rows.map(([a, b]) => `<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join("")}</div>
+    ${s.fiadoId && catalog.fiado.some((e) => e.id === s.fiadoId) ? `<button class="picker" type="button" data-fiado="${esc(s.fiadoId)}"><span class="avatar">${icon("ledger", "i-sm")}</span><span class="mid"><span class="name">Ver o fiado</span><span class="meta">Saldo, abatimentos e cobrança</span></span>${icon("chev", "chev")}</button>` : ""}
+    ${p ? `<button class="picker" type="button" data-product="${esc(p.id)}">${thumbHtml(p)}<span class="mid"><span class="name">Ver a peça</span><span class="meta">${isAvailable(p) ? `${p.stock} un. em estoque` : "Vendida"}</span></span>${icon("chev", "chev")}</button>` : ""}`);
+}
+
+function sheetReceive() {
+  const open = openFiado().sort((a, b) => (a.status === "overdue" ? -1 : 0) - (b.status === "overdue" ? -1 : 0) || num(b.balance) - num(a.balance));
+  openSheet("Receber abatimento", `<label class="search">${icon("search")}<input id="rc-q" type="search" placeholder="Buscar cliente ou peça" autocomplete="off" aria-label="Buscar cliente ou peça"></label><div class="group" id="rc-list"></div>`);
+  const fill = () => {
+    const q = $("#rc-q").value.trim().toLowerCase();
+    const list = open.filter((e) => { const c = clientOf(e); return !q || `${c.name} ${e.productName}`.toLowerCase().includes(q); });
+    $("#rc-list").innerHTML = list.length ? list.map(rowFiado).join("") : `<p class="empty">Nenhum fiado em aberto encontrado.</p>`;
+  };
+  $("#rc-q").addEventListener("input", fill);
+  fill();
+}
+
+// ---- vitrine ----
+async function saveBanners(banners, promoPopup) {
+  const body = { banners: banners.map((b) => ({ id: b.id, type: b.type, title: b.title || "", alt: b.alt || "", image: b.image || "", video: b.video || "" })) };
+  if (promoPopup) body.promoPopup = promoPopup;
+  const data = await request("/api/admin/banners", { method: "PUT", body: JSON.stringify(body) });
+  catalog.banners = data.banners;
+  if (data.promoPopup) catalog.promoPopup = data.promoPopup;
+  renderAll();
+}
+function sheetSlide(k) {
+  const isNew = k === null;
+  const b = isNew ? { type: "image", image: "", video: "", title: "", alt: "" } : catalog.banners[k];
+  draft = { kind: "slide", k, ...b, uploading: false };
+  const n = catalog.banners.length;
+  openSheet(isNew ? "Novo slide" : `Slide ${k + 1} de ${n}`, `
+    <div class="field"><span class="field-label">Como aparece na loja</span><div id="slide-prev"></div></div>
+    <label class="upload" for="sl-file"><span class="ic">${icon("camera")}</span><span><b id="sl-up-label">${isNew ? "Escolher foto ou vídeo" : "Trocar foto ou vídeo"}</b><small>Foto JPG, PNG ou WEBP · vídeo MP4 até 50 MB</small></span></label>
+    <input class="vh" type="file" id="sl-file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
+    <label class="field"><span class="field-label">Texto sobre o banner</span><input class="input" id="sl-title" value="${esc(b.title || "")}" placeholder="Ex.: Novidades da temporada" maxlength="60"><span class="hint">Opcional. Aparece em letras grandes sobre a foto.</span></label>
+    <label class="field"><span class="field-label">Descrição da imagem</span><input class="input" id="sl-alt" value="${esc(b.alt && b.alt !== "Banner" && b.alt !== b.title ? b.alt : "")}" placeholder="Ex.: Pulseira gourmet no pulso"><span class="hint">Lida por leitores de tela e pelo Google.</span></label>
+    <details class="more"><summary>Colar link do arquivo</summary><div class="more-body"><label class="field"><span class="field-label">Link da foto ou do vídeo</span><input class="input" id="sl-url" value="${esc(b.type === "video" ? b.video : b.image)}" placeholder="https://… ou assets/uploads/arquivo.mp4"></label><p class="hint">Use se o vídeo for grande demais para enviar. Termine em .mp4 para vídeo.</p></div></details>
+    ${isNew ? "" : `<div class="switch-row"><span><b>Posição no banner</b><small>${k + 1}º de ${n} slides</small></span><span class="order-btns order-btns--row"><button type="button" data-move-slide="${k}" data-dir="-1" data-in-sheet aria-label="Subir" ${k === 0 ? "disabled" : ""}>${icon("up", "i-xs")}</button><button type="button" data-move-slide="${k}" data-dir="1" data-in-sheet aria-label="Descer" ${k === n - 1 ? "disabled" : ""}>${icon("down", "i-xs")}</button></span></div>
+    <button class="danger-link" type="button" data-remove-slide="${k}">${icon("trash", "i-sm")}Remover slide</button>`}`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--primary" type="button" data-save-slide>${isNew ? "Adicionar ao banner" : "Salvar slide"}</button>`);
+  const paint = () => { $("#slide-prev").innerHTML = heroPreviewHtml(draft, isNew ? n : k, n + (isNew ? 1 : 0)); };
+  paint();
+  $("#sl-title").addEventListener("input", (e) => { draft.title = e.target.value; paint(); });
+  $("#sl-alt").addEventListener("input", (e) => { draft.alt = e.target.value; });
+  $("#sl-url").addEventListener("change", (e) => {
+    const url = e.target.value.trim();
+    if (!url) return;
+    const video = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+    Object.assign(draft, video ? { type: "video", video: url, image: "" } : { type: "image", image: url, video: "" });
+    paint();
+  });
+  $("#sl-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const d = draft;
+    d.uploading = true;
+    $("#sl-up-label").textContent = `Enviando ${fileSize(file.size)}…`;
+    sheetError("");
+    try {
+      const up = await uploadFile(file, { banner: true });
+      Object.assign(d, up.mediaType === "video" ? { type: "video", video: up.url, image: "" } : { type: "image", image: up.url, video: "" });
+      if (draft === d) { paint(); $("#sl-url").value = up.url; }
+    } catch (error) {
+      sheetError(error.message);
+    } finally {
+      d.uploading = false;
+      if ($("#sl-up-label")) $("#sl-up-label").textContent = "Trocar foto ou vídeo";
+    }
+  });
+}
+async function saveSlide(btn) {
+  const d = draft;
+  if (d.uploading) return sheetError("Espere o arquivo terminar de enviar.");
+  if (d.type === "video" ? !d.video : !d.image) return sheetError("Escolha uma foto ou um vídeo para o slide.");
+  const title = $("#sl-title").value.trim();
+  const slide = { id: d.id, type: d.type, image: d.image, video: d.type === "video" ? d.video : "", title, alt: $("#sl-alt").value.trim() || title || "Banner" };
+  const list = catalog.banners.map((b) => ({ ...b }));
+  if (d.k === null) list.push(slide); else list[d.k] = slide;
+  const isNew = d.k === null;
+  await busy(btn, async () => {
+    await saveBanners(list);
+    state.heroIndex = isNew ? list.length - 1 : d.k;
+    renderHeroPreview();
+    closeSheet();
+    toast(isNew ? "Slide adicionado · já aparece na loja" : "Slide salvo · já aparece na loja");
+  });
+}
+async function moveSlide(k, dir, inSheet, btn) {
+  const to = k + dir;
+  const list = catalog.banners.map((b) => ({ ...b }));
+  if (to < 0 || to >= list.length) return;
+  [list[k], list[to]] = [list[to], list[k]];
+  await busy(btn, async () => {
+    await saveBanners(list);
+    state.heroIndex = to;
+    renderHeroPreview();
+    toast(`Agora é o ${to + 1}º slide`);
+    if (inSheet) sheetSlide(to);
+  }, "…");
+}
+
+function offerCardHtml(p, list, price) {
+  const pct = list > price && price > 0 ? Math.round((1 - price / list) * 100) : 0;
+  return `<div class="pcard"><div class="pcard-img">${thumbHtml(p, "")}${pct ? '<span class="sale">SALE</span>' : ""}</div><div class="pcard-body"><small>${esc(p.category || "")}</small><b>${esc(p.name)}</b><span>${pct ? `<s>${moneyTxt(list)}</s> ` : ""}<strong>${moneyTxt(price || 0)}</strong></span></div></div>`;
+}
+function sheetOffer(id) {
+  const p = productById(id);
+  if (!p) {
+    const pool = catalog.products.filter((x) => isOnStore(x) && !isPromo(x)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    openSheet("Colocar peça em oferta", `<p class="hint">Escolha a peça. Depois você define o preço de antes e o da oferta.</p><label class="search">${icon("search")}<input id="of-q" type="search" placeholder="Buscar peça" autocomplete="off" aria-label="Buscar peça"></label><div class="group" id="of-list"></div>`);
+    const fill = () => {
+      const q = $("#of-q").value.trim().toLowerCase();
+      const items = pool.filter((x) => !q || x.name.toLowerCase().includes(q));
+      $("#of-list").innerHTML = items.length ? items.map((x) => `<button class="rowi" type="button" data-offer="${esc(x.id)}">${thumbHtml(x)}<span class="mid"><span class="name">${esc(x.name)}</span><span class="meta">${esc(x.category)} · ${x.stock} un.</span></span><span class="end">${money(x.priceMin)}</span></button>`).join("") : `<p class="empty">Nenhuma peça disponível com esse nome.</p>`;
+    };
+    $("#of-q").addEventListener("input", fill);
+    fill();
+    return;
+  }
+  const inOffer = isPromo(p);
+  draft = { kind: "offer", id: p.id, list: hasSalePrice(p) ? num(p.priceList) : Math.round(num(p.priceMin) * 1.2 / 10) * 10, price: num(p.priceMin), badge: p.badge === "sale" || !inOffer };
+  openSheet(inOffer ? "Editar oferta" : "Nova oferta", `
+    <div class="offer-top"><div id="offer-card"></div><div class="offer-pct"><span class="label">Desconto</span><b class="money" id="offer-pct"></b><span class="hint">Assim a peça aparece na seção Promoções da loja.</span></div></div>
+    <div class="two"><label class="field"><span class="field-label">Preço de antes</span><input class="input money-in" id="of-list" inputmode="decimal" value="${moneyInput(draft.list)}"></label><label class="field"><span class="field-label">Preço da oferta</span><input class="input money-in" id="of-price" inputmode="decimal" value="${moneyInput(draft.price)}"></label></div>
+    <p class="hint" id="of-margin"></p>
+    <div class="switch-row"><span><b>Selo SALE na foto</b><small>Etiqueta vermelha sobre a peça</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.badge}" data-draft-switch="badge" aria-label="Selo SALE na foto"></button></div>
+    ${inOffer ? `<button class="danger-link" type="button" data-remove-offer="${esc(p.id)}">${icon("x", "i-sm")}Tirar da oferta (mantém ${moneyTxt(p.priceMin)})</button>` : ""}`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--gold" type="button" data-save-offer>Salvar oferta</button>`);
+  const paint = () => {
+    $("#offer-card").innerHTML = offerCardHtml(p, draft.list, draft.price);
+    const pct = draft.list > draft.price && draft.price > 0 ? Math.round((1 - draft.price / draft.list) * 100) : 0;
+    $("#offer-pct").textContent = pct ? `−${pct}%` : "—";
+    $("#of-margin").innerHTML = draft.price && num(p.cost) ? `Margem na oferta: <b class="${draft.price - num(p.cost) < 0 ? "neg" : ""}">${moneyTxt(draft.price - num(p.cost))}</b> (custo ${moneyTxt(p.cost)})` : "";
+  };
+  paint();
+  $("#of-list").addEventListener("input", (e) => { draft.list = parseMoney(e.target.value) || 0; paint(); });
+  $("#of-price").addEventListener("input", (e) => { draft.price = parseMoney(e.target.value) || 0; paint(); });
+}
+async function saveOffer(btn) {
+  const p = productById(draft.id);
+  if (!(draft.price > 0)) return sheetError("Informe o preço da oferta.");
+  if (!(draft.list > draft.price)) return sheetError("O preço de antes precisa ser maior que o da oferta.");
+  const { price, list, badge } = draft;
+  await busy(btn, async () => {
+    await request(`/api/admin/products/${encodeURIComponent(p.id)}`, { method: "PUT", body: JSON.stringify(productPayload(p, { priceMin: price, priceMax: price, priceList: list, badge: badge ? "sale" : (p.badge === "sale" ? "" : p.badge || "") })) });
+    await loadCatalog();
+    closeSheet();
+    toast(`Oferta salva · −${Math.round((1 - price / list) * 100)}% na loja`);
+  });
+}
+// Tirar da oferta mantém o preço atual: só some o preço riscado e o selo SALE.
+async function removeOffer(btn, id) {
+  const p = productById(id);
+  const price = num(p.priceMin);
+  await busy(btn, async () => {
+    await request(`/api/admin/products/${encodeURIComponent(p.id)}`, { method: "PUT", body: JSON.stringify(productPayload(p, { priceList: "", badge: p.badge === "sale" ? "" : p.badge || "" })) });
+    await loadCatalog();
+    closeSheet();
+    toast(`Fora da oferta · preço continua ${moneyTxt(price)}`);
+  }, "…");
+}
+
+function popupPreviewHtml(d) {
+  return `<div class="pop-prev">${d.image ? `<img src="${esc(d.image)}" alt="">` : ""}<div class="pop-body"><b>${esc(d.headline || "Título do pop-up")}</b><span class="pop-in">Seu nome</span><span class="pop-in">Seu WhatsApp</span><span class="pop-btn">Ver meu cupom</span></div></div>`;
+}
+function sheetPopup() {
+  const pp = catalog.promoPopup || {};
+  draft = { kind: "popup", enabled: pp.enabled !== false, image: pp.image || "", couponCode: pp.couponCode || "", sellerPhone: pp.sellerPhone || "", headline: pp.headline || "", instruction: pp.instruction || "" };
+  openSheet("Pop-up do cupom", `
+    <div class="field"><span class="field-label">Como aparece na loja</span><div id="pop-prev"></div></div>
+    <label class="upload" for="pp-file"><span class="ic">${icon("camera")}</span><span><b id="pp-up-label">Trocar imagem do pop-up</b><small>JPG, PNG ou WEBP</small></span></label>
+    <input class="vh" type="file" id="pp-file" accept="image/jpeg,image/png,image/webp">
+    <label class="field"><span class="field-label">Título</span><input class="input" id="pp-head" value="${esc(draft.headline)}" placeholder="Ganhe seu cupom de desconto"></label>
+    <div class="two"><label class="field"><span class="field-label">Código do cupom</span><input class="input" id="pp-code" value="${esc(draft.couponCode)}" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600" placeholder="OUTUBRO10"></label><label class="field"><span class="field-label">WhatsApp do vendedor</span><input class="input" id="pp-phone" inputmode="tel" value="${esc(fmtPhone(draft.sellerPhone))}" placeholder="(48) 99999-9999"></label></div>
+    <label class="field"><span class="field-label">Mensagem depois de liberar o cupom</span><textarea class="input" id="pp-ins" placeholder="Ao chamar no WhatsApp do vendedor, mencione o cupom.">${esc(draft.instruction)}</textarea></label>
+    <details class="more"><summary>Colar link da imagem</summary><div class="more-body"><label class="field"><span class="field-label">Link da imagem</span><input class="input" id="pp-url" value="${esc(draft.image)}" placeholder="/assets/promo-coupon.jpg"></label></div></details>`,
+    `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--primary" type="button" data-save-popup>Salvar pop-up</button>`);
+  const paint = () => { $("#pop-prev").innerHTML = popupPreviewHtml(draft); };
+  paint();
+  $("#pp-head").addEventListener("input", (e) => { draft.headline = e.target.value; paint(); });
+  $("#pp-url").addEventListener("change", (e) => { draft.image = e.target.value.trim(); paint(); });
+  $("#pp-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const d = draft;
+    $("#pp-up-label").textContent = "Enviando…";
+    try {
+      const up = await uploadFile(file);
+      d.image = up.url;
+      if (draft === d) { $("#pp-url").value = up.url; paint(); }
+    } catch (error) {
+      sheetError(error.message);
+    } finally {
+      if ($("#pp-up-label")) $("#pp-up-label").textContent = "Trocar imagem do pop-up";
+    }
+  });
+}
+async function savePopup(btn) {
+  const d = draft;
+  const couponCode = $("#pp-code").value.trim().toUpperCase().replace(/\s+/g, "");
+  const sellerPhone = phoneDigits($("#pp-phone").value);
+  if (!couponCode) return sheetError("Informe o código do cupom.");
+  if (sellerPhone.length < 10) return sheetError("Informe o WhatsApp do vendedor com DDD.");
+  const promoPopup = { enabled: d.enabled, image: $("#pp-url").value.trim() || d.image, couponCode, sellerPhone, headline: $("#pp-head").value.trim(), instruction: $("#pp-ins").value.trim() };
+  await busy(btn, async () => {
+    await saveBanners(catalog.banners, promoPopup);
+    closeSheet();
+    toast("Pop-up salvo · já vale na loja");
+  });
+}
+
+// ---------- ações ----------
+async function toggleHome(btn, id) {
+  const p = productById(id);
+  const next = p.showOnHome === false;
+  btn.setAttribute("aria-checked", String(next));
+  await busy(null, async () => {
+    await request(`/api/admin/products/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(productPayload(p, { showOnHome: next })) });
+    await loadCatalog();
+    toast(next ? "Peça na página principal" : "Peça fora da página principal");
+  });
+  if (sheetOpen() && productById(id)) btn.setAttribute("aria-checked", String(productById(id).showOnHome !== false));
+}
+async function deleteProduct(btn, id) {
+  const p = productById(id);
+  if (!window.confirm(`Excluir "${p.name}" da loja? As vendas já registradas continuam no histórico.`)) return;
+  await busy(btn, async () => {
+    await request(`/api/admin/products/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await loadCatalog();
+    closeSheet();
+    toast("Peça excluída");
+  }, "Excluindo…");
+}
+async function restock(btn, id) {
+  const quantity = Math.floor(num($("#rs-qty").value));
+  if (quantity < 1) return sheetError("Informe quantas unidades chegaram.");
+  await busy(btn, async () => {
+    const p = await request("/api/admin/stock", { method: "POST", body: JSON.stringify({ productId: id, quantity }) });
+    await loadCatalog();
+    toast(`Estoque: ${p.stock} un.`);
+    sheetProduct(id);
+  });
+}
+async function deleteClient(btn, id) {
+  const c = catalog.clients.find((x) => x.id === id);
+  if (!window.confirm(`Excluir ${c.name}? O histórico de vendas continua salvo.`)) return;
+  await busy(btn, async () => {
+    await request(`/api/admin/clients/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await loadCatalog();
+    closeSheet();
+    toast("Cliente excluído");
+  }, "Excluindo…");
+}
+async function deleteLead(btn, id) {
+  const c = catalog.prospects.find((x) => x.id === id);
+  if (!window.confirm(`Excluir o contato de ${c?.name || "cliente"}?`)) return;
+  await busy(btn, async () => {
+    await request(`/api/admin/prospects/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await loadCatalog();
+    toast("Contato excluído");
+  }, "…");
+}
+async function togglePopup(btn) {
+  const pp = { ...(catalog.promoPopup || {}) };
+  pp.enabled = pp.enabled === false;
+  btn.setAttribute("aria-checked", String(pp.enabled));
+  await busy(null, async () => {
+    await saveBanners(catalog.banners, pp);
+    toast(pp.enabled ? "Pop-up ligado na loja" : "Pop-up desligado");
+  });
+}
+async function removeSlide(btn, k) {
+  if (catalog.banners.length === 1) return sheetError("O banner precisa de pelo menos um slide.");
+  if (!window.confirm("Remover este slide do banner da loja?")) return;
+  const list = catalog.banners.filter((_, i) => i !== k);
+  await busy(btn, async () => {
+    await saveBanners(list);
+    state.heroIndex = 0;
+    closeSheet();
+    toast("Slide removido");
+  }, "Removendo…");
+}
+
+document.addEventListener("click", (event) => {
+  const t = event.target.closest("button, [data-product], [data-fiado], [data-client]");
+  if (!t || t.disabled) return;
+  const d = t.dataset;
+  if (d.go) { closeSheet(); go(d.go); return; }
+  if (d.goFiado) { closeSheet(); state.fiado.view = d.goFiado; renderFiado(); go("fiado"); return; }
+  if (d.pecasFilter && !t.closest("#pecas-chips")) { closeSheet(); state.pecas.view = "available"; state.pecas.filter = d.pecasFilter; renderPecas(); go("pecas"); return; }
+  if (t.hasAttribute("data-close")) { closeSheet(); return; }
+  if (t.id === "sheet-back") { sheetBack?.(); return; }
+  if (d.open === "new") return sheetNew();
+  if (d.open === "sale") return sheetSale("");
+  if (d.open === "fiado-sale") return sheetFiadoSale("");
+  if (d.open === "receive") return sheetReceive();
+  if (d.open === "client") return sheetClient("");
+  if (t.hasAttribute("data-new-product")) return sheetEditProduct("");
+  if (t.hasAttribute("data-search-shortcut")) { closeSheet(); go("pecas"); setTimeout(() => $("#q-pecas").focus(), 60); return; }
+
+  // filtros das telas
+  if (d.pecasView) { state.pecas.view = d.pecasView; state.pecas.filter = "all"; renderPecas(); return; }
+  if (d.pecasFilter) { state.pecas.filter = state.pecas.filter === d.pecasFilter && d.pecasFilter !== "all" ? "all" : d.pecasFilter; renderPecas(); return; }
+  if (d.period) { state.vendas.period = d.period; state.vendas.limit = 40; renderVendas(); return; }
+  if (d.saleCat) { state.vendas.category = d.saleCat; state.vendas.limit = 40; renderVendas(); return; }
+  if (t.hasAttribute("data-more-sales")) { state.vendas.limit += 40; renderVendas(); return; }
+  if (d.fiadoView) { closeSheet(); state.fiado.view = d.fiadoView; renderFiado(); if (state.screen !== "fiado") go("fiado"); return; }
+  if (d.clientFilter) { state.fiado.clients = d.clientFilter; renderFiado(); return; }
+
+  // abrir itens
+  if (d.product) return sheetProduct(d.product);
+  if (d.fiado) return sheetFiado(d.fiado);
+  if (d.client !== undefined && t.hasAttribute("data-client")) return d.client ? sheetClient(d.client) : null;
+  if (d.sale) return sheetSaleDetail(d.sale);
+  if (d.editProduct) return sheetEditProduct(d.editProduct);
+  if (d.restock) return sheetRestock(d.restock);
+  if (d.sell) return sheetSale(d.sell);
+  if (d.sellFiado) return sheetFiadoSale(d.sellFiado);
+  if (d.newFiadoClient) return sheetFiadoSale("", d.newFiadoClient);
+  if (d.editFiado) return sheetEditFiado(d.editFiado);
+  if (d.slide !== undefined && t.hasAttribute("data-slide")) return sheetSlide(Number(d.slide));
+  if (t.hasAttribute("data-new-slide")) return sheetSlide(null);
+  if (t.hasAttribute("data-offer")) return sheetOffer(d.offer);
+  if (t.hasAttribute("data-popup")) return sheetPopup();
+
+  // dentro dos painéis
+  if (d.pickProduct) return pickProduct(d.pickProduct, d.prefix);
+  if (d.repick) { draft.productId = ""; $(d.repick === "sp" ? "#sale-picker" : "#fs-picker").innerHTML = productPickerHtml("", d.repick); $(`#${d.repick}-q`).addEventListener("input", () => fillProductPick(d.repick)); fillProductPick(d.repick); $(`#${d.repick}-q`).focus(); draft.updateTotals?.(); return; }
+  if (d.pickClient) { draft.clientId = d.pickClient; draft.newClient = false; renderClientPicker(); return; }
+  if (t.hasAttribute("data-new-client-inline")) { draft.clientId = ""; draft.newClient = true; renderClientPicker(); $("#nc-name").focus(); return; }
+  if (t.hasAttribute("data-repick-client")) { draft.clientId = ""; draft.newClient = false; renderClientPicker(); $("#cp-q")?.focus(); return; }
+  if (d.step) { const input = $(`#${d.step}`); const v = Math.floor(num(input.value)) + Number(d.d); input.value = Math.min(num(input.max || 999), Math.max(num(input.min || 0), v)); input.dispatchEvent(new Event("input", { bubbles: true })); return; }
+  if (d.segValue !== undefined && t.closest("[data-seg]")) { $$("button", t.closest("[data-seg]")).forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return; }
+  if (d.pickValue && t.closest("[data-pick]")) { const box = t.closest("[data-pick]"); draft[box.dataset.pick] = d.pickValue; $$("button", box).forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return; }
+  if (d.draftSwitch) { draft[d.draftSwitch] = !draft[d.draftSwitch]; t.setAttribute("aria-checked", String(draft[d.draftSwitch])); return; }
+  if (d.phRemove !== undefined && t.hasAttribute("data-ph-remove")) { draft.photos.splice(Number(d.phRemove), 1); renderSlots(); return; }
+  if (d.phCover) { draft.cover = draft.photos[Number(d.phCover)]; renderSlots(); toast("Capa da vitrine definida"); return; }
+  if (d.phLeft) { const k = Number(d.phLeft); [draft.photos[k - 1], draft.photos[k]] = [draft.photos[k], draft.photos[k - 1]]; renderSlots(); return; }
+  if (d.amount) { $("#ab-val").value = moneyInput(Number(d.amount)); return; }
+  if (t.hasAttribute("data-add-pay")) { $("[data-no-pays]")?.remove(); $("#ef-pays").insertAdjacentHTML("beforeend", payRowHtml({ note: "Abatimento" })); $("#ef-pays [data-pay-row]:last-child [data-f=amount]").focus(); updateFiadoTotals(); return; }
+  if (t.hasAttribute("data-remove-pay")) { t.closest("[data-pay-row]").remove(); updateFiadoTotals(); return; }
+
+  // salvar
+  if (t.hasAttribute("data-save-product")) return saveProduct(t);
+  if (d.saveRestock) return restock(t, d.saveRestock);
+  if (t.hasAttribute("data-save-sale")) return saveSale(t);
+  if (t.hasAttribute("data-save-fiado-sale")) return saveFiadoSale(t);
+  if (d.savePayment) return savePayment(t, d.savePayment);
+  if (d.saveEditFiado) return saveEditFiado(t, d.saveEditFiado);
+  if (d.saveClient !== undefined && t.hasAttribute("data-save-client")) return saveClient(t, d.saveClient);
+  if (t.hasAttribute("data-save-slide")) return saveSlide(t);
+  if (d.moveSlide !== undefined && t.hasAttribute("data-move-slide")) return moveSlide(Number(d.moveSlide), Number(d.dir), t.hasAttribute("data-in-sheet"), t);
+  if (d.removeSlide !== undefined && t.hasAttribute("data-remove-slide")) return removeSlide(t, Number(d.removeSlide));
+  if (t.hasAttribute("data-save-offer")) return saveOffer(t);
+  if (d.removeOffer) return removeOffer(t, d.removeOffer);
+  if (t.hasAttribute("data-save-popup")) return savePopup(t);
+  if (t.hasAttribute("data-popup-toggle")) return togglePopup(t);
+  if (d.toggleHome) return toggleHome(t, d.toggleHome);
+  if (d.deleteProduct) return deleteProduct(t, d.deleteProduct);
+  if (d.deleteClient) return deleteClient(t, d.deleteClient);
+  if (d.delLead) return deleteLead(t, d.delLead);
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await request("/api/admin/logout", { method: "POST" });
+$("#scrim").addEventListener("click", closeSheet);
+$("#sheet-body").addEventListener("input", () => updateFiadoTotals());
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && sheetOpen()) { closeSheet(); return; }
+  if (event.key === "/" && !event.target.matches("input, textarea, select") && !sheetOpen() && loaded) {
+    event.preventDefault();
+    go("pecas");
+    $("#q-pecas").focus();
+  }
+});
+$("#q-pecas").addEventListener("input", (e) => { state.pecas.q = e.target.value; renderPecas(); });
+$("#q-fiado").addEventListener("input", (e) => { state.fiado.q = e.target.value; renderFiado(); });
+
+// ---------- sessão ----------
+async function loadCatalog() {
+  const data = await request("/api/admin/store");
+  catalog = {
+    products: Array.isArray(data.products) ? data.products : [],
+    banners: Array.isArray(data.banners) ? data.banners : [],
+    sales: Array.isArray(data.sales) ? data.sales : [],
+    clients: Array.isArray(data.clients) ? data.clients : [],
+    fiado: Array.isArray(data.fiado) ? data.fiado : [],
+    prospects: Array.isArray(data.prospects) ? data.prospects : [],
+    promoPopup: data.promoPopup || {}
+  };
+  loaded = true;
+  $("#loading").hidden = true;
+  renderAll();
+  go(state.screen, { scroll: false });
+}
+function showLogin(message = "") {
+  $("#app-view").hidden = true;
+  $("#login-view").hidden = false;
+  const err = $("#login-error");
+  err.hidden = !message;
+  err.textContent = message;
+}
+async function enterPanel() {
+  $("#login-view").hidden = true;
+  $("#app-view").hidden = false;
+  $("#app-error").hidden = true;
+  const hash = location.hash.slice(1);
+  if (["home", "pecas", "vendas", "fiado", "vitrine"].includes(hash)) state.screen = hash;
+  setTitle();
+  try {
+    await loadCatalog();
+    startHeroRotation();
+  } catch (error) {
+    if (error.status === 401) { showLogin("Login aceito, mas a sessão não foi salva. Libere os cookies deste site e tente de novo."); return; }
+    $("#loading").hidden = true;
+    const el = $("#app-error");
+    el.hidden = false;
+    el.textContent = `Não foi possível carregar os dados do painel: ${error.message} Recarregue a página.`;
+  }
+}
+$("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const btn = event.submitter || $("#login-form button[type=submit]");
+  const err = $("#login-error");
+  err.hidden = true;
+  btn.disabled = true;
+  btn.textContent = "Entrando…";
+  try {
+    await request("/api/admin/login", { method: "POST", body: JSON.stringify({ user: $("#login-user").value.trim(), password: $("#login-password").value }) });
+  } catch (error) {
+    err.hidden = false;
+    err.textContent = error.message;
+    return;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+  }
+  $("#login-password").value = "";
+  await enterPanel();
+});
+$("#logout-btn").addEventListener("click", async () => {
+  await request("/api/admin/logout", { method: "POST" }).catch(() => {});
+  loaded = false;
   showLogin();
 });
 
-document.querySelectorAll(".admin-tabs button").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".admin-tabs button").forEach((item) => item.classList.remove("is-active"));
-    button.classList.add("is-active");
-    button.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-    document.querySelectorAll(".tab-panel").forEach((panel) => {
-      panel.hidden = panel.id !== `tab-${button.dataset.tab}`;
-    });
-    if (button.dataset.tab === "stock") stockSearch.focus();
-    if (button.dataset.tab === "products") productSearch.focus();
-    if (button.dataset.tab === "fiado") renderFiado();
-  });
-});
-
-document.getElementById("new-product-btn").addEventListener("click", () => openProduct(null));
-document.getElementById("new-product-stock-btn").addEventListener("click", () => openProduct(null));
-document.getElementById("cancel-product").addEventListener("click", () => productDialog.close());
-productSearch.addEventListener("input", renderProducts);
-stockSearch.addEventListener("input", renderStock);
-bindFilterBar("product-filters", "products", renderProducts);
-bindStockFilters();
-
-document.getElementById("sales-period-filters").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-period]");
-  if (!button) return;
-  salesFilter.period = button.dataset.period;
-  renderSales();
-});
-
-document.getElementById("sales-category-filters").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-sale-cat]");
-  if (!button) return;
-  salesFilter.category = button.dataset.saleCat;
-  renderSales();
-});
-
-document.getElementById("tab-fiado").addEventListener("click", (event) => {
-  if (event.target.closest("[data-new-client]")) {
-    openClient(null);
-    return;
-  }
-  const jump = event.target.closest("[data-fiado-view]");
-  if (!jump) return;
-  fiadoView = jump.dataset.fiadoView;
-  renderFiado();
-});
-document.getElementById("cancel-client").addEventListener("click", () => document.getElementById("client-dialog").close());
-document.getElementById("cancel-payment").addEventListener("click", () => document.getElementById("payment-dialog").close());
-document.getElementById("cancel-fiado-edit").addEventListener("click", () => document.getElementById("fiado-edit-dialog").close());
-
-document.getElementById("add-fiado-payment-row").addEventListener("click", () => {
-  const list = document.getElementById("fiado-payments-list");
-  const hint = list.querySelector(".panel-hint");
-  if (hint) hint.remove();
-  list.insertAdjacentHTML("beforeend", renderFiadoPaymentRow({ note: "Abatimento" }));
-  updateFiadoEditTotals(document.getElementById("fiado-edit-form"));
-});
-
-document.getElementById("fiado-payments-list").addEventListener("click", (event) => {
-  if (!event.target.closest("[data-remove-payment-row]")) return;
-  event.target.closest(".fiado-payment-row")?.remove();
-  const list = document.getElementById("fiado-payments-list");
-  if (!list.querySelector(".fiado-payment-row")) {
-    list.innerHTML = "<p class='panel-hint'>Nenhum abatimento registrado.</p>";
-  }
-  updateFiadoEditTotals(document.getElementById("fiado-edit-form"));
-});
-
-document.getElementById("fiado-edit-form").addEventListener("input", (event) => {
-  updateFiadoEditTotals(event.currentTarget);
-});
-
-document.getElementById("fiado-edit-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const errorEl = document.getElementById("fiado-edit-error");
-  showError(errorEl, "");
-  const form = event.target;
-  try {
-    await request(`/api/admin/fiado/${form.elements.id.value}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        quantity: Number(form.elements.quantity.value),
-        unitPrice: Number(form.elements.unitPrice.value),
-        installmentAmount: Number(form.elements.installmentAmount.value || 0),
-        nextDueDate: form.elements.nextDueDate.value,
-        notes: form.elements.notes.value,
-        payments: collectFiadoPaymentEditor(),
-        expectedPaymentIds: paymentIdsOf(catalog.fiado.find((item) => item.id === form.elements.id.value))
-      })
-    });
-    document.getElementById("fiado-edit-dialog").close();
-    await loadCatalog();
-  } catch (error) {
-    showError(errorEl, error.message);
-  }
-});
-document.getElementById("client-search").addEventListener("input", (event) => {
-  clientSearchQuery = event.target.value;
-  renderClients();
-});
-
-document.getElementById("client-filters").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-client-filter]");
-  if (!button) return;
-  clientListFilter = button.dataset.clientFilter;
-  renderClients();
-});
-
-document.getElementById("client-list").addEventListener("click", async (event) => {
-  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
-  const deleteId = event.target.closest("[data-delete-client]")?.dataset.deleteClient;
-  if (editId) {
-    openClientById(editId);
-  }
-  if (deleteId && window.confirm("Excluir este cliente?")) {
-    await request(`/api/admin/clients/${deleteId}`, { method: "DELETE" });
-    await loadCatalog();
-  }
-});
-
-document.getElementById("client-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const clientError = document.getElementById("client-error");
-  showError(clientError, "");
-  const payload = Object.fromEntries(new FormData(event.target).entries());
-  const id = payload.id;
-  try {
-    await request(id ? `/api/admin/clients/${id}` : "/api/admin/clients", {
-      method: id ? "PUT" : "POST",
-      body: JSON.stringify(payload)
-    });
-    document.getElementById("client-dialog").close();
-    await loadCatalog();
-  } catch (error) {
-    showError(clientError, error.message);
-  }
-});
-
-document.getElementById("fiado-category").addEventListener("change", () => {
-  fillFiadoProducts(document.querySelector("#fiado-form [name='productId']").value);
-});
-
-document.querySelector("#fiado-form [name='productId']").addEventListener("change", (event) => {
-  const option = event.target.selectedOptions[0];
-  lastFiadoProductId = option?.value || "";
-  if (option) {
-    document.querySelector("#fiado-form [name='unitPrice']").value = option.dataset.price || 0;
-  }
-});
-
-document.getElementById("fiado-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const fiadoError = document.getElementById("fiado-error");
-  showError(fiadoError, "");
-  const payload = Object.fromEntries(new FormData(event.target).entries());
-  if (!payload.clientId) {
-    showError(fiadoError, "Cadastre e selecione um cliente.");
-    return;
-  }
-  if (!payload.productId) {
-    showError(fiadoError, "Selecione um produto.");
-    return;
-  }
-  try {
-    await request("/api/admin/fiado", {
-      method: "POST",
-      body: JSON.stringify({
-        clientId: payload.clientId,
-        productId: payload.productId,
-        quantity: Number(payload.quantity),
-        unitPrice: Number(payload.unitPrice),
-        downPayment: Number(payload.downPayment || 0),
-        nextDueDate: payload.nextDueDate,
-        installmentAmount: Number(payload.installmentAmount || 0),
-        notes: payload.notes
-      })
-    });
-    lastFiadoProductId = payload.productId;
-    event.target.elements.downPayment.value = 0;
-    event.target.elements.notes.value = "";
-    fiadoView = "cobrar";
-    await loadCatalog();
-  } catch (error) {
-    showError(fiadoError, error.message);
-  }
-});
-
-document.getElementById("fiado-search").addEventListener("input", (event) => {
-  fiadoSearchQuery = event.target.value;
-  const openItems = (catalog.fiado || []).filter((item) => item.status !== "paid");
-  renderFiadoQueue(
-    openItems,
-    openItems.filter((item) => item.status === "overdue"),
-    openItems.filter(isDueSoon)
-  );
-});
-
-document.getElementById("fiado-alerts").addEventListener("click", (event) => {
-  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
-  if (editId) {
-    openClientById(editId);
-  }
-});
-
-document.getElementById("fiado-list").addEventListener("click", async (event) => {
-  const editPaymentBtn = event.target.closest("[data-edit-payment]");
-  if (editPaymentBtn) {
-    const entry = catalog.fiado.find((item) => item.id === editPaymentBtn.dataset.fiadoId);
-    const payment = entry?.payments?.find((item) => item.id === editPaymentBtn.dataset.editPayment);
-    if (entry && payment) openPaymentEdit(entry, payment);
-    return;
-  }
-
-  const deletePaymentBtn = event.target.closest("[data-delete-payment]");
-  if (deletePaymentBtn) {
-    const entry = catalog.fiado.find((item) => item.id === deletePaymentBtn.dataset.fiadoId);
-    if (!entry) return;
-    if (!window.confirm("Excluir este abatimento? O saldo será recalculado.")) return;
-    const payments = (entry.payments || []).filter((item) => item.id !== deletePaymentBtn.dataset.deletePayment);
-    try {
-      await persistFiadoPayments(entry, payments);
-      await loadCatalog();
-    } catch (error) {
-      showError(document.getElementById("fiado-error"), error.message);
-    }
-    return;
-  }
-
-  const editFiadoId = event.target.closest("[data-edit-fiado]")?.dataset.editFiado;
-  if (editFiadoId) {
-    const entry = catalog.fiado.find((item) => item.id === editFiadoId);
-    if (entry) openFiadoEdit(entry);
-    return;
-  }
-  const editId = event.target.closest("[data-edit-client]")?.dataset.editClient;
-  if (editId) {
-    openClientById(editId);
-    return;
-  }
-  const fiadoId = event.target.closest("[data-pay-fiado]")?.dataset.payFiado;
-  if (!fiadoId) return;
-  const entry = catalog.fiado.find((item) => item.id === fiadoId);
-  if (entry) openPayment(entry);
-});
-
-document.getElementById("payment-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const paymentError = document.getElementById("payment-error");
-  showError(paymentError, "");
-  const payload = Object.fromEntries(new FormData(event.target).entries());
-  try {
-    if (payload.paymentId) {
-      const entry = catalog.fiado.find((item) => item.id === payload.fiadoId);
-      if (!entry) throw new Error("Fiado não encontrado.");
-      const payments = (entry.payments || []).map((pay) => (
-        pay.id === payload.paymentId
-          ? {
-            ...pay,
-            amount: Number(payload.amount),
-            paidAt: payload.paidAt,
-            note: payload.note
-          }
-          : pay
-      ));
-      await persistFiadoPayments(
-        { ...entry, nextDueDate: payload.nextDueDate || entry.nextDueDate },
-        payments
-      );
-    } else {
-      await request(`/api/admin/fiado/${payload.fiadoId}/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount: Number(payload.amount),
-          nextDueDate: payload.nextDueDate,
-          note: payload.note
-        })
-      });
-    }
-    document.getElementById("payment-dialog").close();
-    await loadCatalog();
-  } catch (error) {
-    showError(paymentError, error.message);
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "/" || event.target.matches("input, textarea, select")) return;
-  event.preventDefault();
-  if (!document.getElementById("tab-stock").hidden) stockSearch.focus();
-  else if (!document.getElementById("tab-products").hidden) productSearch.focus();
-});
-
-function handleProductListClick(event) {
-  const editBtn = event.target.closest("[data-edit]");
-  const deleteBtn = event.target.closest("[data-delete]");
-  const editId = editBtn?.dataset.edit;
-  const deleteId = deleteBtn?.dataset.delete;
-  if (editId) {
-    openProduct(catalog.products.find((item) => item.id === editId));
-  }
-  if (deleteId && window.confirm("Excluir este produto da loja?")) {
-    request(`/api/admin/products/${deleteId}`, { method: "DELETE" }).then(loadCatalog);
-  }
-}
-
-productList.addEventListener("click", handleProductListClick);
-document.getElementById("promo-product-list")?.addEventListener("click", handleProductListClick);
-
-document.getElementById("product-files").addEventListener("change", async (event) => {
-  const files = [...event.target.files];
-  event.target.value = "";
-  try {
-    for (const file of files) {
-      productImages.push((await uploadFile(file)).url);
-    }
-    renderPhotoPreviews();
-  } catch (error) {
-    showError(productError, error.message);
-  }
-});
-
-document.getElementById("product-previews").addEventListener("click", (event) => {
-  const index = event.target.dataset.removePhoto;
-  if (index === undefined) return;
-  productImages.splice(Number(index), 1);
-  renderPhotoPreviews();
-});
-
-productForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  showError(productError, "");
-  const payload = Object.fromEntries(new FormData(productForm).entries());
-  payload.showOnHome = productForm.elements.showOnHome.checked;
-  payload.stock = Number(payload.stock || 0);
-  if (payload.id && productStockSeen !== null) payload.stockSeen = productStockSeen;
-  payload.images = productImages;
-  payload.image = productImages[0] || "";
-  if (!payload.image) {
-    showError(productError, "Envie ao menos uma foto para a vitrine.");
-    return;
-  }
-  const id = payload.id;
-  try {
-    await request(id ? `/api/admin/products/${id}` : "/api/admin/products", {
-      method: id ? "PUT" : "POST",
-      body: JSON.stringify(payload)
-    });
-    productDialog.close();
-    await loadCatalog();
-  } catch (error) {
-    showError(productError, error.message);
-  }
-});
-
-document.getElementById("stock-list").addEventListener("submit", async (event) => {
-  const form = event.target.closest("form[data-stock]");
-  if (!form) return;
-  event.preventDefault();
-  const quantity = Number(new FormData(form).get("quantity") || 0);
-  stockFocusId = form.dataset.stock;
-  await request("/api/admin/stock", {
-    method: "POST",
-    body: JSON.stringify({ productId: form.dataset.stock, quantity })
-  });
-  await loadCatalog();
-});
-
-document.getElementById("stock-list").addEventListener("click", (event) => {
-  const editId = event.target.dataset.editStock;
-  if (editId) {
-    openProduct(catalog.products.find((item) => item.id === editId));
-    return;
-  }
-  const step = event.target.closest("[data-step]");
-  if (!step) return;
-  const form = step.closest("form[data-stock]");
-  const input = form?.querySelector("[name='quantity']");
-  if (!input) return;
-  input.value = Math.max(1, Number(input.value || 1) + Number(step.dataset.step));
-});
-
-document.getElementById("sale-category").addEventListener("change", () => {
-  fillSaleProducts(document.querySelector("#sale-form [name='productId']").value);
-});
-
-document.querySelector("#sale-form [name='productId']").addEventListener("change", (event) => {
-  const option = event.target.selectedOptions[0];
-  lastSaleProductId = option?.value || "";
-  if (option) {
-    document.querySelector("#sale-form [name='unitPrice']").value = option.dataset.price || 0;
-  }
-});
-
-async function registerSale() {
-  const saleForm = document.getElementById("sale-form");
-  const saleError = document.getElementById("sale-error");
-  const submitBtn = document.getElementById("register-sale-btn");
-  showError(saleError, "");
-  const payload = Object.fromEntries(new FormData(saleForm).entries());
-  if (!payload.productId) {
-    showError(saleError, "Selecione um produto.");
-    return;
-  }
-  const quantity = Number(payload.quantity);
-  const unitPrice = Number(payload.unitPrice);
-  if (!Number.isFinite(quantity) || quantity < 1) {
-    showError(saleError, "Informe uma quantidade válida.");
-    return;
-  }
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-    showError(saleError, "Informe o valor unitário.");
-    return;
-  }
-  submitBtn.disabled = true;
-  try {
-    await request("/api/admin/sales", {
-      method: "POST",
-      body: JSON.stringify({
-        productId: payload.productId,
-        quantity,
-        unitPrice,
-        paymentMethod: payload.paymentMethod || ""
-      })
-    });
-    lastSaleProductId = payload.productId;
-    saleForm.elements.quantity.value = 1;
-    await loadCatalog();
-    fillSaleProducts(payload.productId);
-    const selected = document.querySelector("#sale-form [name='productId']").selectedOptions[0];
-    if (selected) {
-      document.querySelector("#sale-form [name='unitPrice']").value = selected.dataset.price || unitPrice;
-    }
-  } catch (error) {
-    showError(saleError, error.message);
-  } finally {
-    submitBtn.disabled = false;
-  }
-}
-
-document.getElementById("sale-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  registerSale();
-});
-
-document.getElementById("register-sale-btn").addEventListener("click", (event) => {
-  event.preventDefault();
-  registerSale();
-});
-
-document.getElementById("add-banner-btn").addEventListener("click", () => {
-  catalog.banners.push({ title: "", type: "image", image: "", video: "" });
-  renderBanners();
-});
-
-bannerList.addEventListener("change", async (event) => {
-  const card = event.target.closest(".banner-card");
-  if (!card) return;
-
-  if (event.target.matches('[data-field="type"]')) {
-    if (event.target.value === "image") {
-      card.querySelector('[data-field="video"]').value = "";
-    }
-    catalog.banners = collectBanners();
-    renderBanners();
-    return;
-  }
-
-  if (event.target.matches('[data-field="media-url"]')) {
-    const url = event.target.value.trim();
-    const type = card.querySelector('[data-field="type"]').value;
-    if (type === "video") {
-      card.querySelector('[data-field="video"]').value = url;
-      card.querySelector('[data-field="image"]').value = "";
-    } else {
-      card.querySelector('[data-field="image"]').value = url;
-      card.querySelector('[data-field="video"]').value = "";
-    }
-    card.querySelector(".banner-preview").innerHTML = bannerMedia({
-      type,
-      video: type === "video" ? url : "",
-      image: type === "image" ? url : ""
-    });
-    return;
-  }
-
-  if (!event.target.matches("[data-upload]")) return;
-  const file = event.target.files[0];
-  event.target.value = "";
-  if (!file) return;
-  const bannerError = document.getElementById("banner-error");
-  showError(bannerError, "");
-  try {
-    const uploaded = await uploadFile(file, { banner: true });
-    if (uploaded.mediaType === "video") {
-      card.querySelector('[data-field="type"]').value = "video";
-      card.querySelector('[data-field="video"]').value = uploaded.url;
-      card.querySelector('[data-field="image"]').value = "";
-    } else {
-      card.querySelector('[data-field="type"]').value = "image";
-      card.querySelector('[data-field="image"]').value = uploaded.url;
-      card.querySelector('[data-field="video"]').value = "";
-    }
-    catalog.banners = collectBanners();
-    await persistBanners();
-  } catch (error) {
-    showError(bannerError, error.message);
-  }
-});
-
-bannerList.addEventListener("click", (event) => {
-  const card = event.target.closest(".banner-card");
-  if (!card) return;
-  const moving = event.target.dataset.move;
-  const removing = "remove" in event.target.dataset;
-  if (!moving && !removing) return;
-  const index = Number(card.dataset.index);
-  catalog.banners = collectBanners();
-  if (moving === "up" && index > 0) {
-    [catalog.banners[index - 1], catalog.banners[index]] = [catalog.banners[index], catalog.banners[index - 1]];
-  }
-  if (moving === "down" && index < catalog.banners.length - 1) {
-    [catalog.banners[index + 1], catalog.banners[index]] = [catalog.banners[index], catalog.banners[index + 1]];
-  }
-  if (removing) {
-    catalog.banners.splice(index, 1);
-  }
-  renderBanners();
-});
-
-document.getElementById("save-banners-btn").addEventListener("click", () => {
-  persistBanners();
-});
-
-document.getElementById("promo-image-url")?.addEventListener("input", (event) => {
-  const value = event.target.value.trim();
-  document.getElementById("promo-image").value = value;
-  const preview = document.getElementById("promo-image-preview");
-  if (preview) {
-    preview.src = value;
-    preview.hidden = !value;
-  }
-});
-
-document.getElementById("promo-image-upload")?.addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  event.target.value = "";
-  if (!file) return;
-  const bannerError = document.getElementById("banner-error");
-  showError(bannerError, "");
-  try {
-    const uploaded = await uploadFile(file);
-    document.getElementById("promo-image").value = uploaded.url;
-    document.getElementById("promo-image-url").value = uploaded.url;
-    const preview = document.getElementById("promo-image-preview");
-    if (preview) {
-      preview.src = uploaded.url;
-      preview.hidden = false;
-    }
-  } catch (error) {
-    showError(bannerError, error.message);
-  }
-});
-
-document.getElementById("prospect-list")?.addEventListener("click", async (event) => {
-  const deleteId = event.target.closest("[data-delete-prospect]")?.dataset.deleteProspect;
-  if (!deleteId || !window.confirm("Excluir este prospect?")) return;
-  await request(`/api/admin/prospects/${deleteId}`, { method: "DELETE" });
-  await loadCatalog();
-});
-
-function isIosDevice() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-function setupAdminPwa() {
-  if ("serviceWorker" in navigator) {
-    if (isIosDevice()) {
-      // No iPhone, o service worker do app instalado impede o cookie de sessão.
-      navigator.serviceWorker.getRegistrations()
-        .then(async (registrations) => {
-          if (!registrations.length) return;
-          const controlled = Boolean(navigator.serviceWorker.controller);
-          await Promise.all(registrations.map((registration) => registration.unregister()));
-          if (controlled) window.location.reload();
-        })
-        .catch(() => {});
-    } else {
-      navigator.serviceWorker.getRegistrations()
-        .then(async (registrations) => {
-          const rootWorkers = registrations.filter((registration) => {
-            try {
-              return new URL(registration.scope).pathname === "/";
-            } catch {
-              return false;
-            }
-          });
-          await Promise.all(rootWorkers.map((registration) => registration.unregister()));
-          await navigator.serviceWorker.register("/sw-admin.js", { scope: "/admin" });
-        })
-        .catch(() => {});
-    }
-  }
-
-  const installBtn = document.getElementById("install-pwa-btn");
-  if (!installBtn) return;
-
-  const standalone = window.matchMedia("(display-mode: standalone)").matches
-    || window.navigator.standalone === true;
-  if (standalone) {
-    installBtn.hidden = true;
-    return;
-  }
-
-  let deferredPrompt = null;
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    deferredPrompt = event;
-    installBtn.hidden = false;
-  });
-
-  installBtn.addEventListener("click", async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice.catch(() => {});
-      deferredPrompt = null;
-      installBtn.hidden = true;
-      return;
-    }
-    if (isIosDevice()) {
-      window.alert("No iPhone/iPad: toque em Compartilhar no Safari e escolha \"Adicionar à Tela de Início\".");
-    }
-  });
-
-  window.addEventListener("appinstalled", () => {
-    deferredPrompt = null;
-    installBtn.hidden = true;
-  });
-
-  if (isIosDevice()) {
-    installBtn.hidden = false;
-    installBtn.textContent = "Instalar no iPhone";
-  }
-}
-
-setupAdminPwa();
-
-request("/api/admin/me")
-  .then(enterPanel, showLogin);
-
-// O app instalado no celular fica aberto por horas. Ao voltar para ele, busca os
-// dados de novo para mostrar vendas e abatimentos feitos em outro aparelho.
+// O app instalado fica aberto por horas: ao voltar para ele, busca os dados de novo.
 let lastRefreshAt = Date.now();
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible" || appView.hidden) return;
-  if (Date.now() - lastRefreshAt < 15000) return;
-  if (document.querySelector("dialog[open]")) return;
+  if (document.visibilityState !== "visible" || !loaded || $("#app-view").hidden) return;
+  if (Date.now() - lastRefreshAt < 15000 || sheetOpen()) return;
   lastRefreshAt = Date.now();
-  loadCatalog()
-    .then(() => showError(appError, ""))
-    .catch((error) => {
-      if (error.status === 401) {
-        showLogin();
-        showError(loginError, error.message);
-        return;
-      }
-      showError(appError, `Não foi possível atualizar os dados: ${error.message}`);
-    });
+  loadCatalog().catch((error) => { if (error.status !== 401) toast(`Não foi possível atualizar: ${error.message}`, { error: true }); });
 });
+
+// ---------- app instalado ----------
+const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function setupPwa() {
+  if ("serviceWorker" in navigator) {
+    if (isIos()) {
+      // No iPhone, o service worker do app instalado impede o cookie de sessão.
+      navigator.serviceWorker.getRegistrations().then(async (regs) => {
+        if (!regs.length) return;
+        const controlled = Boolean(navigator.serviceWorker.controller);
+        await Promise.all(regs.map((r) => r.unregister()));
+        if (controlled) window.location.reload();
+      }).catch(() => {});
+    } else {
+      navigator.serviceWorker.getRegistrations().then(async (regs) => {
+        await Promise.all(regs.filter((r) => { try { return new URL(r.scope).pathname === "/"; } catch { return false; } }).map((r) => r.unregister()));
+        await navigator.serviceWorker.register("/sw-admin.js", { scope: "/admin" });
+      }).catch(() => {});
+    }
+  }
+  const row = $("#install-row");
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  if (standalone) return;
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; row.hidden = false; });
+  window.addEventListener("appinstalled", () => { deferred = null; row.hidden = true; });
+  if (isIos()) { row.hidden = false; $("#install-meta").textContent = "No Safari: Compartilhar → Adicionar à Tela de Início"; }
+  row.addEventListener("click", async () => {
+    if (deferred) { deferred.prompt(); await deferred.userChoice.catch(() => {}); deferred = null; row.hidden = true; return; }
+    toast("No Safari: toque em Compartilhar e em Adicionar à Tela de Início");
+  });
+}
+
+setupPwa();
+request("/api/admin/me").then(enterPanel, () => showLogin());

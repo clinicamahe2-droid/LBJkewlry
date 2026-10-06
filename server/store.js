@@ -306,7 +306,10 @@ function normalizeProduct(input, existingId) {
   const extraImages = Array.isArray(input.images)
     ? input.images.map(stripTags).filter(Boolean)
     : [];
-  const images = [image, ...extraImages.filter((src) => src !== image)];
+  // A galeria segue a ordem enviada (Peça, Mostruário, Em uso) e a capa da
+  // vitrine pode ser qualquer uma delas; só garante que a capa esteja na galeria.
+  const uniqueImages = [...new Set(extraImages)];
+  const images = uniqueImages.includes(image) ? uniqueImages : [image, ...uniqueImages];
 
   const variants = Array.isArray(input.thickness)
     ? input.thickness.map(stripTags).filter(Boolean)

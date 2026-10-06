@@ -1,10 +1,9 @@
-const CACHE_NAME = "lb-admin-v20260328";
+const CACHE_NAME = "lb-admin-v20261006r";
 const PRECACHE_URLS = [
   "/admin",
   "/admin.html",
-  "/admin.css?v=20260328",
-  "/admin.js?v=20260328",
-  "/catalog.js?v=20260328",
+  "/admin.css?v=20261006r",
+  "/admin.js?v=20261006r",
   "/admin-manifest.json",
   "/assets/pwa/icon-192.png",
   "/assets/pwa/icon-512.png",

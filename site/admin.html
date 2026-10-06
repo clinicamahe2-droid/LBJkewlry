@@ -6,418 +6,209 @@
   <title>Painel | LB jewelry</title>
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta name="theme-color" content="#161616">
+  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F0D0A" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="LB Painel">
   <link rel="manifest" href="/admin-manifest.json">
   <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=20260929b">
-  <link rel="prefetch" href="/">
-  <link rel="prefetch" href="/styles.css">
-  <link rel="prefetch" href="/catalog.js">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css?v=20261006r">
 </head>
 <body>
-  <div id="login-view" class="login-wrap">
-    <form id="login-form" class="login-card">
-      <p class="login-brand">LB jewelry</p>
-      <h1>Acesso do administrador</h1>
-      <label>
-        Usuário
-        <input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6.5 4h11L21 9l-9 11L3 9z"/><path d="M3 9h18M9.5 4 8 9l4 11 4-11-1.5-5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 15l4-4 3 3 5-6"/><circle cx="18" cy="8" r="1.2"/></symbol>
+    <symbol id="i-ledger" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16M8 14h4"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9l1.5-4h13L20 9M4 9v10h16V9M4 9h16"/><path d="M10 19v-5h4v5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 18.5 6 15a7 7 0 1 1 3 3z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M15 5l4 4-10 10H5v-4z"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"/><path d="M9 8a3 3 0 0 1 6 0"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M4 14h4l3 2h5a1.5 1.5 0 0 0 0-3h-3"/><path d="M4 19h12l5-4a1.6 1.6 0 0 0-2-2.4L16 14"/><circle cx="15" cy="6" r="2.5"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.5 9.5c-.5-.8-1.4-1.2-2.5-1.2-1.4 0-2.5.7-2.5 1.8 0 2.6 5 1.4 5 4 0 1.1-1.1 1.9-2.5 1.9-1.2 0-2.1-.5-2.6-1.3M12 6.8v1.5M12 15.7v1.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M4 12V5h7l9 9-7 7z"/><circle cx="8" cy="9" r="1.2"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.5M17.5 19a5 5 0 0 0-2-4"/></symbol>
+    <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="10" cy="9" r="3"/><path d="M4.5 19a5.5 5.5 0 0 1 11 0M18 8v6M15 11h6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 5h4a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h9"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m20 16-5-5-8 8"/></symbol>
+  </svg>
+
+  <div id="login-view" class="login">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <span class="mono mono--lg">LB</span>
+      <p class="eyebrow">LB jewelry</p>
+      <h1>Painel da loja</h1>
+      <label class="field"><span class="field-label">Usuário</span>
+        <input class="input" type="text" name="user" id="login-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
       </label>
-      <label>
-        Senha
-        <input type="password" name="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
+      <label class="field"><span class="field-label">Senha</span>
+        <input class="input" type="password" name="password" id="login-password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
       </label>
-      <p id="login-error" class="form-error" hidden></p>
-      <button type="submit">Entrar</button>
-      <p class="login-pwa-hint">No celular: instale o painel como app. No iPhone, use Compartilhar → Adicionar à Tela de Início.</p>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button type="submit" class="btn btn--primary">Entrar</button>
+      <p class="login-hint">No celular, instale como app: no iPhone, use Compartilhar → Adicionar à Tela de Início.</p>
     </form>
   </div>
 
-  <div id="app-view" hidden>
-    <header class="admin-header">
-      <div class="admin-header-bar">
-        <div class="admin-brand-block">
-          <p class="login-brand">LB jewelry</p>
-          <strong>Painel</strong>
-        </div>
-        <div class="admin-actions">
-          <button id="install-pwa-btn" type="button" hidden>Instalar app</button>
-          <a href="/" target="_blank" rel="noopener">Ver loja</a>
-          <button id="logout-btn" type="button">Sair</button>
-        </div>
-      </div>
-      <nav class="admin-tabs" aria-label="Seções do painel">
-        <button type="button" data-tab="products" class="is-active">Produtos</button>
-        <button type="button" data-tab="stock">Estoque</button>
-        <button type="button" data-tab="sales">Vendas</button>
-        <button type="button" data-tab="fiado" class="fiado-tab">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M3 10h18M8 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Fiado
-        </button>
-        <button type="button" data-tab="banners">Banner</button>
-        <button type="button" data-tab="prospects">Prospects</button>
+  <div id="app-view" class="app" hidden>
+    <aside class="side" aria-label="Seções">
+      <div class="side-brand"><span class="mono">LB</span><div><b>LB jewelry</b><small>Painel da loja</small></div></div>
+      <button class="nav" type="button" data-go="home"><svg class="i"><use href="#i-home"/></svg>Início</button>
+      <button class="nav" type="button" data-go="pecas"><svg class="i"><use href="#i-gem"/></svg>Peças</button>
+      <button class="nav" type="button" data-go="vendas"><svg class="i"><use href="#i-chart"/></svg>Vendas</button>
+      <button class="nav" type="button" data-go="fiado"><svg class="i"><use href="#i-ledger"/></svg>Fiado<span class="nav-badge" data-overdue-badge hidden></span></button>
+      <button class="nav" type="button" data-go="vitrine"><svg class="i"><use href="#i-store"/></svg>Vitrine</button>
+      <button class="side-new" type="button" data-open="new"><svg class="i"><use href="#i-plus"/></svg>Nova ação</button>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <span class="mono">LB</span>
+        <div class="topbar-title"><small id="top-sub"></small><b id="top-title">Início</b></div>
+        <button class="icon-btn" type="button" data-search-shortcut aria-label="Buscar peça"><svg class="i"><use href="#i-search"/></svg></button>
+      </header>
+
+      <main class="content" id="content">
+        <p id="app-error" class="banner-error" role="alert" hidden></p>
+        <div id="loading" class="loading" aria-live="polite"><span></span>Carregando o painel…</div>
+
+        <!-- INÍCIO -->
+        <section class="screen cols" id="s-home" data-title="" hidden>
+          <div class="colstack">
+            <button class="hero hero--link" type="button" data-go="vendas">
+              <span class="hero-top"><span class="label" id="h-label">Recebido no mês</span><span id="h-delta"></span></span>
+              <span class="big money" id="h-month"></span>
+              <span class="hero-row"><span>Resultado <b id="h-result"></b></span><span>Margem <b id="h-margin"></b></span><span><b id="h-count"></b></span><span class="link-txt">Ver vendas ›</span></span>
+            </button>
+            <div class="kpis" id="home-kpis"></div>
+            <div class="sec-head"><h3>Precisa de atenção</h3><button type="button" data-go="fiado">Ver fiado</button></div>
+            <div class="group" id="home-attn"></div>
+          </div>
+          <div class="colstack">
+            <div class="sec-head"><h3>Últimas vendas</h3><button type="button" data-go="vendas">Ver todas</button></div>
+            <div class="group" id="home-sales"></div>
+            <div class="sec-head"><h3>Na loja</h3><button type="button" data-go="vitrine">Vitrine</button></div>
+            <div class="group" id="home-store"></div>
+          </div>
+        </section>
+
+        <!-- PEÇAS -->
+        <section class="screen" id="s-pecas" data-title="Peças" data-sub="Estoque e vitrine" hidden>
+          <div class="toolbar">
+            <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="q-pecas" type="search" placeholder="Buscar peça ou código" autocomplete="off" aria-label="Buscar peça"></label>
+            <button class="btn btn--ink btn--sm" type="button" data-new-product><svg class="i"><use href="#i-plus"/></svg>Nova peça</button>
+          </div>
+          <div class="seg" role="group" aria-label="Situação" id="pecas-view"></div>
+          <div class="chips" id="pecas-chips" role="group" aria-label="Filtrar peças"></div>
+          <p class="summary-line" id="pecas-sum"></p>
+          <div class="group" id="pecas-list"></div>
+        </section>
+
+        <!-- VENDAS -->
+        <section class="screen cols" id="s-vendas" data-title="Vendas" data-sub="Resultado e histórico" hidden>
+          <div class="full stack-sm">
+            <div class="seg" role="group" aria-label="Período" id="vendas-period"></div>
+            <div class="chips" role="group" aria-label="Categoria" id="vendas-cats"></div>
+          </div>
+          <div class="colstack">
+            <div class="hero">
+              <span class="label" id="v-label">Recebido</span>
+              <span class="big money" id="v-total"></span>
+              <span class="hero-row"><span>Custo <b id="v-cost"></b></span><span>Resultado <b id="v-res"></b></span><span>Ticket <b id="v-ticket"></b></span><span><b id="v-units"></b></span></span>
+            </div>
+            <div class="chart"><div class="chart-head"><span class="label">Faturamento por mês</span><span class="label">mil R$</span></div><svg id="chart" viewBox="0 0 340 160" role="img" aria-label="Faturamento dos últimos meses"></svg></div>
+            <div class="bars" id="cat-bars"></div>
+          </div>
+          <div class="colstack">
+            <div class="sec-head"><h3 id="hist-title">Histórico</h3><button type="button" data-open="sale">Registrar venda</button></div>
+            <div id="sales-days" class="stack"></div>
+          </div>
+        </section>
+
+        <!-- FIADO -->
+        <section class="screen" id="s-fiado" data-title="Fiado" data-sub="Cobranças e abatimentos" hidden>
+          <div class="kpis" id="fiado-kpis"></div>
+          <div class="seg" role="group" aria-label="Lista" id="fiado-view"></div>
+          <div class="toolbar">
+            <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="q-fiado" type="search" placeholder="Buscar cliente ou peça" autocomplete="off" aria-label="Buscar cliente ou peça"></label>
+            <button class="btn btn--ink btn--sm" type="button" data-open="client"><svg class="i"><use href="#i-user-plus"/></svg>Cliente</button>
+          </div>
+          <div class="chips" id="client-chips" role="group" aria-label="Filtrar clientes" hidden></div>
+          <div id="fiado-list" class="stack"></div>
+        </section>
+
+        <!-- VITRINE -->
+        <section class="screen cols" id="s-vitrine" data-title="Vitrine" data-sub="O que aparece na loja" hidden>
+          <div class="colstack">
+            <div class="stack-sm">
+              <div class="sec-head sec-head--flush"><h3>Na loja agora</h3><a href="/" target="_blank" rel="noopener">Ver loja ↗</a></div>
+              <div id="hero-live"></div>
+              <div class="pills" id="vit-summary"></div>
+            </div>
+            <div class="sec-head"><h3>Banner principal</h3><button type="button" data-new-slide>+ Novo slide</button></div>
+            <div class="group" id="vit-banners"></div>
+            <p class="foot-hint">Toque num slide para trocar foto, vídeo ou texto. As setas mudam a ordem.</p>
+          </div>
+          <div class="colstack">
+            <div class="sec-head"><h3>Promoções</h3><button type="button" data-offer="">+ Colocar em oferta</button></div>
+            <div class="group" id="vit-offers"></div>
+            <div class="sec-head"><h3>Pop-up do cupom</h3></div>
+            <div id="vit-popup" class="stack-sm"></div>
+            <div class="sec-head"><h3>Contatos do cupom</h3><span class="label" id="vit-leads-count"></span></div>
+            <div class="group" id="vit-leads"></div>
+            <div class="sec-head"><h3>Conta</h3></div>
+            <div class="group">
+              <a class="rowi rowi--plain" href="/" target="_blank" rel="noopener"><span class="avatar"><svg class="i i-sm"><use href="#i-store"/></svg></span><span class="mid"><span class="name">Ver loja</span><span class="meta">Abre a loja em outra aba</span></span><svg class="i chev"><use href="#i-chev"/></svg></a>
+              <button class="rowi rowi--plain" type="button" id="install-row" hidden><span class="avatar"><svg class="i i-sm"><use href="#i-phone"/></svg></span><span class="mid"><span class="name">Instalar como app</span><span class="meta" id="install-meta">Ícone na tela inicial do celular</span></span><svg class="i chev"><use href="#i-chev"/></svg></button>
+            </div>
+            <button class="danger-link" type="button" id="logout-btn"><svg class="i i-sm"><use href="#i-out"/></svg>Sair do painel</button>
+          </div>
+        </section>
+      </main>
+
+      <nav class="tabbar" aria-label="Navegação">
+        <button class="tab" type="button" data-go="home"><svg class="i"><use href="#i-home"/></svg>Início</button>
+        <button class="tab" type="button" data-go="pecas"><svg class="i"><use href="#i-gem"/></svg>Peças</button>
+        <button class="facet" type="button" data-open="new" aria-label="Nova ação"><svg class="i"><use href="#i-plus"/></svg></button>
+        <button class="tab" type="button" data-go="fiado"><svg class="i"><use href="#i-ledger"/></svg>Fiado<span class="tab-badge" data-overdue-badge hidden></span></button>
+        <button class="tab" type="button" data-go="vitrine"><svg class="i"><use href="#i-store"/></svg>Vitrine</button>
       </nav>
-    </header>
+    </div>
 
-    <main class="admin-main">
-      <p id="app-error" class="form-error" role="alert" hidden></p>
-      <section id="tab-products" class="tab-panel">
-        <div class="panel-head">
-          <h2>Catálogo</h2>
-          <button id="new-product-btn" type="button">Novo produto</button>
-        </div>
-        <section class="promo-block" id="promo-products-block">
-          <div class="promo-block-head">
-            <h3>Itens em promoção</h3>
-            <span class="promo-count" id="promo-count"></span>
-          </div>
-          <p class="panel-hint promo-hint">Marque o selo <strong>Sale</strong> ou preencha um preço riscado maior que o preço atual.</p>
-          <div id="promo-product-list" class="item-list promo-product-list"></div>
-        </section>
-        <p class="panel-hint">A lista abre com as peças disponíveis. As vendidas entram pelo filtro Vendidos.</p>
-        <div class="ops-toolbar">
-          <input id="product-search" type="search" placeholder="Buscar peça, coleção ou categoria" autocomplete="off">
-          <div class="filter-chips" id="product-filters" role="group" aria-label="Filtrar produtos"></div>
-        </div>
-        <p id="product-result-meta" class="result-meta"></p>
-        <div id="product-list"></div>
-      </section>
-
-      <section id="tab-stock" class="tab-panel" hidden>
-        <div class="panel-head">
-          <h2>Estoque</h2>
-          <button id="new-product-stock-btn" type="button">Novo produto</button>
-        </div>
-        <p class="panel-hint">Aqui ficam as peças que ainda podem ser vendidas. As vendidas entram pelo filtro Vendidos.</p>
-        <div class="ops-toolbar">
-          <input id="stock-search" type="search" placeholder="Buscar peça para repor estoque" autocomplete="off">
-          <div class="filter-chips" id="stock-filters" role="group" aria-label="Filtrar estoque por categoria"></div>
-        </div>
-        <div id="stock-summary" class="stats-grid"></div>
-        <p id="stock-result-meta" class="result-meta"></p>
-        <div id="stock-list"></div>
-      </section>
-
-      <section id="tab-sales" class="tab-panel" hidden>
-        <div class="panel-head">
-          <h2>Vendas à vista</h2>
-        </div>
-          <div class="ops-toolbar">
-            <div class="filter-chips" id="sales-period-filters" role="group" aria-label="Filtrar período"></div>
-            <div class="filter-chips" id="sales-category-filters" role="group" aria-label="Filtrar categoria"></div>
-          </div>
-          <div id="sales-summary" class="stats-grid"></div>
-          <p id="sales-result-meta" class="result-meta"></p>
-          <div class="charts-grid">
-            <article class="chart-card">
-              <h3>Faturamento</h3>
-              <div id="chart-months"></div>
-            </article>
-            <article class="chart-card">
-              <h3>Por categoria</h3>
-              <div id="chart-categories"></div>
-            </article>
-          </div>
-          <h3 class="sales-section-title">Registrar venda</h3>
-          <form id="sale-form" class="sale-form">
-            <label>Categoria
-              <select id="sale-category">
-                <option value="all">Todas</option>
-                <option value="correntes">Correntes</option>
-                <option value="brincos">Brincos</option>
-                <option value="pulseiras">Pulseiras</option>
-                <option value="aneis">Anéis</option>
-              </select>
-            </label>
-            <label>Produto
-              <select name="productId" required></select>
-            </label>
-            <label>Quantidade
-              <input type="number" name="quantity" min="1" step="1" value="1" required>
-            </label>
-            <label>Valor unitário
-              <input type="number" name="unitPrice" min="0" step="0.01" required>
-            </label>
-            <label>Pagamento
-              <select name="paymentMethod">
-                <option value="">Não informado</option>
-                <option value="PIX">PIX</option>
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Cartão">Cartão</option>
-              </select>
-            </label>
-            <button type="button" id="register-sale-btn" class="primary">Registrar venda</button>
-          </form>
-          <p id="sale-error" class="form-error" hidden></p>
-          <h3 class="sales-section-title">Lançamentos</h3>
-          <div id="sales-list" class="table-wrap"></div>
-      </section>
-
-      <section id="tab-fiado" class="tab-panel" hidden>
-        <div id="fiado-summary" class="fiado-kpis"></div>
-        <nav id="fiado-dock" class="fiado-dock" aria-label="Ações do fiado"></nav>
-
-        <div id="fiado-panel-work">
-          <input id="fiado-search" type="search" placeholder="Buscar cliente ou peça" autocomplete="off">
-          <p id="fiado-result-meta" class="result-meta"></p>
-          <div id="fiado-alerts" hidden></div>
-          <div id="fiado-list" class="fiado-queue"></div>
-        </div>
-
-        <div id="fiado-panel-venda" hidden>
-          <form id="fiado-form" class="fiado-form fiado-block">
-            <div class="panel-head panel-head--compact">
-              <h3>Nova venda</h3>
-              <button type="button" data-new-client>Novo cliente</button>
-            </div>
-            <label>Cliente
-              <select name="clientId" required></select>
-            </label>
-            <label>Categoria
-              <select id="fiado-category">
-                <option value="all">Todas</option>
-                <option value="correntes">Correntes</option>
-                <option value="brincos">Brincos</option>
-                <option value="pulseiras">Pulseiras</option>
-                <option value="aneis">Anéis</option>
-              </select>
-            </label>
-            <label>Produto
-              <select name="productId" required></select>
-            </label>
-            <label>Quantidade
-              <input type="number" name="quantity" min="1" step="1" value="1" required>
-            </label>
-            <label>Valor unitário
-              <input type="number" name="unitPrice" min="0" step="0.01" required>
-            </label>
-            <label>Entrada recebida
-              <input type="number" name="downPayment" min="0" step="0.01" value="0">
-            </label>
-            <label>Próximo vencimento
-              <input type="date" name="nextDueDate">
-            </label>
-            <label>Valor da parcela (opcional)
-              <input type="number" name="installmentAmount" min="0" step="0.01" placeholder="Ex.: 2000">
-            </label>
-            <label>Observações
-              <input type="text" name="notes" placeholder="Ex.: pagamento todo dia 10">
-            </label>
-            <button type="submit" class="primary">Registrar fiado</button>
-          </form>
-          <p id="fiado-error" class="form-error" hidden></p>
-        </div>
-
-        <div id="fiado-panel-clientes" hidden>
-          <section class="fiado-block fiado-clients">
-            <div class="panel-head panel-head--compact">
-              <h3>Clientes</h3>
-              <button type="button" id="new-client-btn" data-new-client>Novo cliente</button>
-            </div>
-            <input id="client-search" type="search" placeholder="Buscar cliente" autocomplete="off">
-            <div class="filter-chips" id="client-filters" role="group" aria-label="Filtrar clientes"></div>
-            <div id="client-list" class="client-list"></div>
-          </section>
-        </div>
-      </section>
-
-      <section id="tab-banners" class="tab-panel" hidden>
-        <div class="panel-head">
-          <h2>Banner de entrada</h2>
-          <button id="add-banner-btn" type="button">Adicionar slide</button>
-        </div>
-        <section class="promo-popup-settings" id="promo-popup-settings">
-          <div class="promo-popup-settings-head">
-            <h3>Pop-up promocional (cupom)</h3>
-            <label class="check-label promo-enabled-label">
-              <input type="checkbox" id="promo-enabled">
-              Ativo na home
-            </label>
-          </div>
-          <p class="panel-hint">Card que aparece ao abrir a loja. O visitante preenche nome e WhatsApp para ver o cupom.</p>
-          <div class="promo-popup-settings-grid">
-            <label>Código do cupom<input type="text" id="promo-coupon-code" placeholder="SETEMBRO10"></label>
-            <label>WhatsApp do vendedor<input type="tel" id="promo-seller-phone" placeholder="48996363634"></label>
-            <label>Título do pop-up<input type="text" id="promo-headline" placeholder="Ganhe seu cupom de desconto"></label>
-            <label class="promo-settings-wide">Instrução após liberar o cupom
-              <textarea id="promo-instruction" rows="2" placeholder="Ao chamar no WhatsApp do vendedor, mencione o cupom para ganhar o desconto."></textarea>
-            </label>
-            <input type="hidden" id="promo-image" value="">
-            <label class="promo-settings-wide">Imagem do card promocional
-              <input type="text" id="promo-image-url" placeholder="/assets/promo-coupon-setembro.jpg">
-            </label>
-            <label class="file-label promo-settings-wide">Enviar nova imagem
-              <input type="file" id="promo-image-upload" accept="image/jpeg,image/png,image/webp">
-            </label>
-            <div class="promo-image-preview-wrap">
-              <img id="promo-image-preview" class="promo-image-preview" src="" alt="">
-            </div>
-          </div>
-        </section>
-        <p class="panel-hint">Envie foto ou vídeo (máx. 50 MB) ou cole o link do arquivo. Se o vídeo atual já aparece na loja, basta salvar sem reenviar.</p>
-        <p id="banner-error" class="form-error" hidden></p>
-        <p id="banner-ok" class="form-ok" hidden></p>
-        <div id="banner-list"></div>
-        <button id="save-banners-btn" type="button" class="primary">Salvar banners e cupom</button>
-      </section>
-
-      <section id="tab-prospects" class="tab-panel" hidden>
-        <div class="prospects-hero">
-          <div>
-            <p class="prospects-kicker">Leads do cupom</p>
-            <h2>Prospects</h2>
-            <p class="panel-hint">Quem pediu o cupom na home. Entre em contato pelo WhatsApp.</p>
-          </div>
-          <span class="prospects-count" id="prospects-count">0</span>
-        </div>
-        <div id="prospect-list" class="prospect-list"></div>
-      </section>
-    </main>
+    <div class="scrim" id="scrim"></div>
+    <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-hidden="true">
+      <div class="grab"></div>
+      <div class="sheet-head">
+        <button class="x" type="button" id="sheet-back" aria-label="Voltar" hidden><svg class="i i-sm"><use href="#i-back"/></svg></button>
+        <h2 id="sheet-title"></h2>
+        <button class="x" type="button" data-close aria-label="Fechar"><svg class="i i-sm"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="sheet-body" id="sheet-body"></div>
+      <p class="form-error sheet-error" id="sheet-error" role="alert" hidden></p>
+      <div class="sheet-foot" id="sheet-foot"></div>
+    </section>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </div>
 
-  <dialog id="client-dialog">
-    <form id="client-form" method="dialog">
-      <h2 id="client-dialog-title">Cliente</h2>
-      <input type="hidden" name="id">
-      <label>Nome<input type="text" name="name" required placeholder="Nome completo"></label>
-      <label>Telefone<input type="tel" name="phone" required placeholder="(11) 99999-9999"></label>
-      <label>Endereço<input type="text" name="address" placeholder="Rua, bairro, cidade"></label>
-      <label>Observações<textarea name="notes" rows="4" placeholder="Preferências, combinados de pagamento, etc."></textarea></label>
-      <p id="client-error" class="form-error" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" id="cancel-client">Cancelar</button>
-        <button type="submit" class="primary">Salvar cliente</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="fiado-edit-dialog" class="fiado-edit-dialog">
-    <form id="fiado-edit-form" method="dialog">
-      <h2>Editar fiado</h2>
-      <input type="hidden" name="id">
-      <p id="fiado-edit-summary" class="panel-hint"></p>
-      <div class="form-row fiado-edit-row">
-        <label>Quantidade<input type="number" name="quantity" min="1" step="1" required></label>
-        <label>Valor unitário<input type="number" name="unitPrice" min="0" step="0.01" required></label>
-        <label>Parcela<input type="number" name="installmentAmount" min="0" step="0.01" placeholder="Ex.: 200"></label>
-      </div>
-      <div class="form-row fiado-edit-row">
-        <label>Próximo vencimento<input type="date" name="nextDueDate"></label>
-        <label>Observações<input type="text" name="notes" placeholder="Ex.: pagamento todo dia 10"></label>
-      </div>
-      <section class="fiado-payments-editor">
-        <div class="panel-head panel-head--compact">
-          <h3>Abatimentos</h3>
-          <button type="button" id="add-fiado-payment-row">Adicionar</button>
-        </div>
-        <p class="panel-hint">Corrija valores, datas ou remova lançamentos errados.</p>
-        <div id="fiado-payments-list"></div>
-      </section>
-      <p id="fiado-edit-totals" class="fiado-edit-totals"></p>
-      <p id="fiado-edit-error" class="form-error" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" id="cancel-fiado-edit">Cancelar</button>
-        <button type="submit" class="primary">Salvar alterações</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="payment-dialog">
-    <form id="payment-form" method="dialog">
-      <h2 id="payment-dialog-title">Registrar abatimento</h2>
-      <input type="hidden" name="fiadoId">
-      <input type="hidden" name="paymentId">
-      <p id="payment-summary" class="panel-hint"></p>
-      <label id="payment-paid-at-wrap" hidden>Data do pagamento<input type="date" name="paidAt"></label>
-      <label>Valor recebido<input type="number" name="amount" min="0.01" step="0.01" required></label>
-      <label id="payment-next-due-wrap">Próximo vencimento<input type="date" name="nextDueDate"></label>
-      <label>Observação<input type="text" name="note" placeholder="Ex.: PIX, dinheiro"></label>
-      <p id="payment-error" class="form-error" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" id="cancel-payment">Cancelar</button>
-        <button type="submit" id="payment-submit-btn" class="primary">Confirmar abatimento</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="product-dialog">
-    <form id="product-form" method="dialog">
-      <h2 id="product-dialog-title">Produto</h2>
-      <input type="hidden" name="id">
-      <p class="form-section">Exposição na home</p>
-      <div class="form-row">
-        <label>Estoque inicial<input type="number" name="stock" min="0" step="1" value="1" required></label>
-        <label class="check-label">Página principal
-          <span>
-            <input type="checkbox" name="showOnHome" checked>
-            Subir para a home
-          </span>
-        </label>
-        <label>Selo na vitrine
-          <select name="badge">
-            <option value="">Nenhum</option>
-            <option value="new">Lançamento</option>
-            <option value="sale">Sale</option>
-          </select>
-        </label>
-      </div>
-      <p class="form-section">Identificação</p>
-      <label>Nome da peça<input type="text" name="name" required placeholder="Ex.: Corrente Veneziana em Ouro 18k, 45cm"></label>
-      <div class="form-row">
-        <label>Categoria
-          <select name="categorySlug" required>
-            <option value="correntes">Correntes</option>
-            <option value="brincos">Brincos</option>
-            <option value="pulseiras">Pulseiras</option>
-            <option value="aneis">Anéis</option>
-          </select>
-        </label>
-        <label>Coleção<input type="text" name="collection" placeholder="Ex.: Coleção Veneziana"></label>
-        <label>Código<input type="text" name="sku" placeholder="SKU interno"></label>
-      </div>
-      <p class="form-section">Valores</p>
-      <div class="form-row">
-        <label>Preço mínimo<input type="number" name="priceMin" min="0" step="0.01" required></label>
-        <label>Preço máximo<input type="number" name="priceMax" min="0" step="0.01" required></label>
-        <label>Preço riscado (opcional)<input type="number" name="priceList" min="0" step="0.01"></label>
-        <label>Custo<input type="number" name="cost" min="0" step="0.01" value="0"></label>
-      </div>
-      <label class="check-label">Ativo na loja
-        <span>
-          <input type="checkbox" name="active" checked>
-          Visível para clientes
-        </span>
-      </label>
-      <p class="form-section">Fotos da vitrine</p>
-      <p class="panel-hint">A primeira foto é a da home. Envie mais de uma para a página do produto.</p>
-      <div id="product-previews" class="photo-grid"></div>
-      <label class="file-label">
-        Enviar fotos
-        <input type="file" id="product-files" accept="image/jpeg,image/png,image/webp" multiple>
-      </label>
-      <input type="hidden" name="image">
-      <p class="form-section">Especificações</p>
-      <label>Variantes (separadas por vírgula)<input type="text" name="variants" placeholder="0.95, 1.10, 1.30"></label>
-      <label>Descrição<textarea name="description" rows="3" placeholder="Texto que aparece nos detalhes da peça"></textarea></label>
-      <label>Detalhes (um por linha)<textarea name="detailsText" rows="4" placeholder="Material: Ouro 18k"></textarea></label>
-      <p id="product-error" class="form-error" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" id="cancel-product">Cancelar</button>
-        <button type="submit" class="primary">Salvar produto</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script src="catalog.js?v=20260928"></script>
-  <script src="admin.js?v=20261006b"></script>
+  <script src="admin.js?v=20261006r"></script>
 </body>
 </html>
