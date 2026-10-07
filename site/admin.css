@@ -302,10 +302,14 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .photo-row small.warn { color: var(--citrino); }
 
 /* mês das vendas */
-.month-bar { display: flex; align-items: center; gap: 8px; }
-.month-bar .icon-btn:disabled { opacity: .35; cursor: default; }
-.month-select { flex: 1; min-width: 0; }
-.month-select .input { font-weight: 600; text-align: center; text-align-last: center; padding-left: 34px; }
+.month-bar { display: flex; align-items: center; justify-content: center; gap: 2px; margin: -8px 0 -6px; }
+.month-bar .icon-btn { width: 30px; height: 30px; border: 0; background: none; color: var(--muted); }
+.month-bar .icon-btn:hover:not(:disabled) { color: var(--ink); }
+.month-bar .icon-btn:disabled { opacity: .3; cursor: default; }
+.month-select { position: relative; display: inline-flex; align-items: center; }
+.month-select .input { height: 30px; width: auto; border: 0; background-color: transparent; background-position: calc(100% - 9px) 13px, calc(100% - 5px) 13px; padding: 0 20px 0 6px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); text-align: center; text-align-last: center; cursor: pointer; border-radius: 8px; }
+.month-select .input:hover { color: var(--ink); background-color: var(--raised); }
+.month-select .input:focus { box-shadow: none; outline: 2px solid var(--gold); outline-offset: 1px; }
 .chart-hit { cursor: pointer; }
 
 /* tema */
