@@ -222,18 +222,79 @@ function renderCategoryCovers(products) {
     card.hidden = false;
   });
 
-  document.querySelectorAll("[data-category-link], [data-needs-category]").forEach((node) => {
-    node.hidden = !sellableIn(node.dataset.categoryLink || node.dataset.needsCategory).length;
+  document.querySelectorAll("[data-category-link]").forEach((node) => {
+    node.hidden = !sellableIn(node.dataset.categoryLink).length;
   });
 
   const withStock = Object.keys(CATEGORY_NAMES).filter((slug) => sellableIn(slug).length);
   if (withStock.length) heroCategories = withStock;
 }
 
+// Malhas: o nome da peça diz a malha ("Corrente gourmet duplo", "Pulseira cadeado"...).
+const MALHAS = {
+  gourmet: { label: "Gourmet", match: /gourmet/i },
+  baiano: { label: "Baiano", match: /baian/i },
+  cartier: { label: "Cartier", match: /cartier/i },
+  cadeado: { label: "Cadeado", match: /cadeado/i },
+  piastrine: { label: "Piastrine", match: /piastrine/i }
+};
+let storeProducts = [];
+let activeMalha = "";
+
+function inMalha(product) {
+  return !activeMalha || MALHAS[activeMalha].match.test(product.name || "");
+}
+
+function setupMalhas(products) {
+  const sellable = products.filter(isSellable);
+  let shown = 0;
+  document.querySelectorAll("[data-malha]").forEach((button) => {
+    const malha = MALHAS[button.dataset.malha];
+    button.hidden = !malha || !sellable.some((product) => malha.match.test(product.name || ""));
+    if (!button.hidden) shown += 1;
+  });
+  const section = document.getElementById("malhas");
+  if (section) section.hidden = !shown;
+}
+
+function applyMalha(key) {
+  activeMalha = key && MALHAS[key] ? key : "";
+  document.querySelectorAll("[data-malha]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.malha === activeMalha));
+  });
+  const bar = document.getElementById("malha-filter");
+  const count = storeProducts.filter((product) => isSellable(product) && inMalha(product)).length;
+  if (bar) {
+    bar.hidden = !activeMalha;
+    if (activeMalha) {
+      document.getElementById("malha-filter-name").textContent = MALHAS[activeMalha].label;
+      document.getElementById("malha-filter-count").textContent = `${count} ${count === 1 ? "peça" : "peças"}`;
+    }
+  }
+  renderPromoShelf(storeProducts);
+  renderShelves(storeProducts);
+}
+
+document.addEventListener("click", (event) => {
+  const malha = event.target.closest("[data-malha]");
+  if (malha) {
+    applyMalha(malha.dataset.malha === activeMalha ? "" : malha.dataset.malha);
+    if (activeMalha) document.getElementById("malha-filter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (event.target.closest("[data-malha-clear]")) {
+    applyMalha("");
+    return;
+  }
+  if (activeMalha && event.target.closest("[data-category-link], .hero-ctas a, .cat")) {
+    applyMalha("");
+  }
+});
+
 function renderShelves(products) {
   document.querySelectorAll(".product-grid[data-category]").forEach((grid) => {
     const category = grid.dataset.category;
-    const items = products.filter((item) => item.categorySlug === category && isSellable(item));
+    const items = products.filter((item) => item.categorySlug === category && isSellable(item) && inMalha(item));
     const section = grid.closest(".shelf");
     if (!items.length) {
       if (section) section.hidden = true;
@@ -250,7 +311,7 @@ function renderPromoShelf(products) {
   const grid = document.getElementById("promo-grid");
   if (!section || !grid) return;
 
-  const items = products.filter((item) => isPromoProduct(item) && isSellable(item));
+  const items = products.filter((item) => isPromoProduct(item) && isSellable(item) && inMalha(item));
   if (!items.length) {
     section.hidden = true;
     return;
@@ -372,7 +433,9 @@ function setupPromoPopup(promoPopup) {
 
 fetchCatalog()
   .then((catalog) => {
+    storeProducts = catalog.products;
     renderCategoryCovers(catalog.products);
+    setupMalhas(catalog.products);
     setupHero(catalog.banners);
     renderPromoShelf(catalog.products);
     renderShelves(catalog.products);
