@@ -1,13 +1,13 @@
-const CACHE_NAME = "lb-admin-v20261006z";
+const CACHE_NAME = "lb-admin-v20261007a";
 const PRECACHE_URLS = [
   "/admin",
   "/admin.html",
-  "/admin.css?v=20261006z",
-  "/admin.js?v=20261006z",
-  "/admin-manifest.json",
-  "/assets/pwa/icon-192.png",
-  "/assets/pwa/icon-512.png",
-  "/assets/pwa/apple-touch-icon.png"
+  "/admin.css?v=20261007a",
+  "/admin.js?v=20261007a",
+  "/admin-manifest.json?v=lb18k",
+  "/assets/pwa/icon-192.png?v=lb18k",
+  "/assets/pwa/icon-512.png?v=lb18k",
+  "/assets/pwa/apple-touch-icon.png?v=lb18k"
 ];
 
 self.addEventListener("install", (event) => {
