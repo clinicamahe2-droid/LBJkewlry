@@ -191,7 +191,8 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .bars { display: grid; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
 .bar { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 12.5px; }
 .bar .track { height: 5px; border-radius: 5px; background: var(--line); overflow: hidden; }
-.bar .fill { height: 100%; background: var(--ink); border-radius: 5px; }
+.bar .track { display: block; }
+.bar .fill { display: block; height: 100%; background: var(--ink); border-radius: 5px; }
 .bar .fill.g { background: var(--gold); }
 .bar .val { font-weight: 600; text-align: right; white-space: nowrap; }
 
@@ -299,6 +300,13 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .photo-row b { display: block; font-weight: 500; }
 .photo-row small { font-size: 12px; color: var(--muted); display: block; }
 .photo-row small.warn { color: var(--citrino); }
+
+/* mês das vendas */
+.month-bar { display: flex; align-items: center; gap: 8px; }
+.month-bar .icon-btn:disabled { opacity: .35; cursor: default; }
+.month-select { flex: 1; min-width: 0; }
+.month-select .input { font-weight: 600; text-align: center; text-align-last: center; padding-left: 34px; }
+.chart-hit { cursor: pointer; }
 
 /* tema */
 .theme-row { min-height: 56px; }

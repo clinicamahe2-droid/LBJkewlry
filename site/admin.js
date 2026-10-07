@@ -16,7 +16,7 @@ let catalog = { products: [], banners: [], sales: [], clients: [], fiado: [], pr
 const state = {
   screen: "home",
   pecas: { view: "available", filter: "all", q: "" },
-  vendas: { period: "month", category: "all", limit: 40 },
+  vendas: { period: "month", month: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })(), category: "all", limit: 40 },
   fiado: { view: "cobrar", q: "", clients: "open" },
   heroIndex: 0
 };
@@ -393,13 +393,31 @@ function renderPecas() {
 }
 
 // ---- vendas ----
+const monthKeyOf = (date) => localISO(date).slice(0, 7);
+function monthLabel(key) {
+  const [y, m] = key.split("-").map(Number);
+  return `${MONTHS_LONG[m - 1]} de ${y}`;
+}
+function shiftMonth(key, delta) {
+  const [y, m] = key.split("-").map(Number);
+  return monthKeyOf(new Date(y, m - 1 + delta, 15));
+}
+// Do mês da primeira venda até o mês atual, mais recente primeiro.
+function salesMonths() {
+  const current = monthKeyOf(new Date());
+  const keys = catalog.sales.map((s) => monthKeyOf(s.createdAt)).filter((k) => /^\d{4}-\d{2}$/.test(k));
+  let k = keys.length ? keys.reduce((a, b) => (a < b ? a : b)) : current;
+  const out = [];
+  while (k <= current && out.length < 240) { out.push(k); k = shiftMonth(k, 1); }
+  return out.reverse();
+}
 function salesInPeriod() {
   const { period, category } = state.vendas;
   const now = new Date();
   return catalog.sales.filter((s) => {
     const d = new Date(s.createdAt);
     if (Number.isNaN(d.getTime())) return false;
-    if (period === "month" && (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear())) return false;
+    if (period === "month" && localISO(d).slice(0, 7) !== state.vendas.month) return false;
     if (period === "quarter" && d < new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)) return false;
     if (period === "year" && d.getFullYear() !== now.getFullYear()) return false;
     if (category !== "all") {
@@ -422,11 +440,11 @@ function niceMax(v) {
   return [1, 2, 2.5, 5, 10].map((m) => m * pow).find((m) => m >= v);
 }
 function renderChart() {
-  const now = new Date();
   const cat = state.vendas.category;
+  const endKey = state.vendas.period === "month" ? state.vendas.month : monthKeyOf(new Date());
   const months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    return { key: localISO(d).slice(0, 7), label: MONTHS[d.getMonth()], total: 0 };
+    const key = shiftMonth(endKey, i - 5);
+    return { key, label: MONTHS[Number(key.slice(5)) - 1], total: 0 };
   });
   catalog.sales.forEach((s) => {
     if (cat !== "all" && productById(s.productId)?.categorySlug !== cat) return;
@@ -448,12 +466,24 @@ function renderChart() {
     <path d="${line}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
     ${pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i === last ? 4.5 : 2.5}" fill="${i === last ? "var(--gold)" : "var(--surface)"}" stroke="var(--gold)" stroke-width="1.6"/>`).join("")}
     <text class="ax-strong" x="${Math.min(pts[last][0], W - R - 2)}" y="${Math.max(pts[last][1] - 10, 10)}" text-anchor="end">${fmtK(months[last].total)}</text>
-    ${months.map((m, i) => `<text class="${i === last ? "ax-strong" : "ax"}" x="${x(i)}" y="${H - 8}" text-anchor="middle">${m.label}</text>`).join("")}`;
+    ${months.map((m, i) => `<text class="${i === last ? "ax-strong" : "ax"}" x="${x(i)}" y="${H - 8}" text-anchor="middle">${m.label}</text>`).join("")}
+    ${months.map((m, i) => `<rect class="chart-hit" data-chart-month="${m.key}" x="${x(i) - (W - L - R) / 10}" y="${T - 10}" width="${(W - L - R) / 5}" height="${H - T}" fill="transparent"><title>${monthLabel(m.key)}: R$ ${brl(m.total * 1000)}</title></rect>`).join("")}`;
 }
 function renderVendas() {
   const v = state.vendas;
   const periods = [["month", "Mês"], ["quarter", "Trimestre"], ["year", "Ano"], ["all", "Tudo"]];
   $("#vendas-period").innerHTML = periods.map(([id, l]) => `<button type="button" data-period="${id}" aria-pressed="${v.period === id}">${l}</button>`).join("");
+  const monthBar = $("#vendas-month");
+  monthBar.hidden = v.period !== "month";
+  if (v.period === "month") {
+    const list = salesMonths();
+    if (!list.includes(v.month)) v.month = list[0];
+    const idx = list.indexOf(v.month);
+    monthBar.innerHTML = `<button class="icon-btn" type="button" data-month-step="-1" aria-label="Mês anterior" ${idx >= list.length - 1 ? "disabled" : ""}>${icon("back", "i-sm")}</button>
+      <label class="month-select"><span class="vh">Escolher mês</span><select class="input" id="vendas-month-select">${list.map((k) => `<option value="${k}"${k === v.month ? " selected" : ""}>${monthLabel(k)}</option>`).join("")}</select></label>
+      <button class="icon-btn" type="button" data-month-step="1" aria-label="Próximo mês" ${idx <= 0 ? "disabled" : ""}>${icon("chev", "i-sm")}</button>`;
+    $("#vendas-month-select").addEventListener("change", (e) => { v.month = e.target.value; v.limit = 40; renderVendas(); });
+  }
   $("#vendas-cats").innerHTML = [["all", "Todas"], ...CATEGORIES.map((c) => [c.slug, c.label])].map(([id, l]) => `<button class="chip" type="button" data-sale-cat="${id}" aria-pressed="${v.category === id}">${l}</button>`).join("");
   const rows = salesInPeriod();
   const total = rows.reduce((t, s) => t + saleRevenue(s), 0);
@@ -461,7 +491,7 @@ function renderVendas() {
   const salesOnly = rows.filter((s) => s.type !== "fiado_payment");
   const units = salesOnly.reduce((t, s) => t + num(s.quantity), 0);
   const now = new Date();
-  const label = { month: `Recebido em ${MONTHS_LONG[now.getMonth()]}`, quarter: "Recebido no trimestre", year: `Recebido em ${now.getFullYear()}`, all: "Recebido no total" }[v.period];
+  const label = { month: `Recebido em ${monthLabel(v.month)}`, quarter: "Recebido no trimestre", year: `Recebido em ${now.getFullYear()}`, all: "Recebido no total" }[v.period];
   $("#v-label").textContent = label;
   $("#v-total").innerHTML = money(total);
   $("#v-cost").textContent = moneyTxt(cost);
@@ -1419,10 +1449,12 @@ async function removeSlide(btn, k) {
 }
 
 document.addEventListener("click", (event) => {
+  const hit = event.target.closest("[data-chart-month]");
+  if (hit) { state.vendas.period = "month"; state.vendas.month = hit.dataset.chartMonth; state.vendas.limit = 40; renderVendas(); return; }
   const t = event.target.closest("button, [data-product], [data-fiado], [data-client]");
   if (!t || t.disabled) return;
   const d = t.dataset;
-  if (d.go) { closeSheet(); go(d.go); return; }
+  if (d.go) { closeSheet(); if (d.go === "vendas" && t.classList.contains("hero--link")) { state.vendas.period = "month"; state.vendas.month = monthKeyOf(new Date()); renderVendas(); } go(d.go); return; }
   if (d.goFiado) { closeSheet(); state.fiado.view = d.goFiado; renderFiado(); go("fiado"); return; }
   if (d.pecasFilter && !t.closest("#pecas-chips")) { closeSheet(); state.pecas.view = "available"; state.pecas.filter = d.pecasFilter; renderPecas(); go("pecas"); return; }
   if (t.hasAttribute("data-close")) { closeSheet(); return; }
@@ -1439,6 +1471,7 @@ document.addEventListener("click", (event) => {
   if (d.pecasView) { state.pecas.view = d.pecasView; state.pecas.filter = "all"; renderPecas(); return; }
   if (d.pecasFilter) { state.pecas.filter = state.pecas.filter === d.pecasFilter && d.pecasFilter !== "all" ? "all" : d.pecasFilter; renderPecas(); return; }
   if (d.period) { state.vendas.period = d.period; state.vendas.limit = 40; renderVendas(); return; }
+  if (d.monthStep) { state.vendas.month = shiftMonth(state.vendas.month, Number(d.monthStep)); state.vendas.limit = 40; renderVendas(); return; }
   if (d.saleCat) { state.vendas.category = d.saleCat; state.vendas.limit = 40; renderVendas(); return; }
   if (t.hasAttribute("data-more-sales")) { state.vendas.limit += 40; renderVendas(); return; }
   if (d.fiadoView) { closeSheet(); state.fiado.view = d.fiadoView; renderFiado(); if (state.screen !== "fiado") go("fiado"); return; }
