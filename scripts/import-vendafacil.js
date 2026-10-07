@@ -274,29 +274,8 @@ async function main() {
     if (!knownProducts.has(id) && existingProducts.has(id)) {
       products.push(existingProducts.get(id));
       knownProducts.add(id);
-    } else if (!knownProducts.has(id) && line.nome) {
-      products.push({
-        id,
-        name: clean(line.nome),
-        sku: "",
-        category: "Correntes",
-        categorySlug: "correntes",
-        collection: "Coleção Correntes",
-        badge: null,
-        priceMin: unitPrice,
-        priceMax: unitPrice,
-        cost: unitCost,
-        stock: 0,
-        showOnHome: false,
-        active: false,
-        image: "/assets/logo-lb.png",
-        images: ["/assets/logo-lb.png"],
-        thickness: ["Único"],
-        description: "",
-        details: ["Produto citado em venda importada"]
-      });
-      knownProducts.add(id);
     }
+    // Peça apagada no VendaFácil: a venda guarda só o nome, sem recriar um cadastro vazio.
 
     // Fiado quitado continua como fiado (pago), para manter o histórico de
     // abatimentos na aba Fiado em vez de virar venda à vista.
