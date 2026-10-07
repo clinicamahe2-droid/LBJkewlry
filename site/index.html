@@ -2,163 +2,115 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Joias, Anéis, Brincos e Correntes | LB jewelry</title>
-  <meta name="description" content="LB jewelry. Correntes, pulseiras, brincos e anéis.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>LB18k | Correntes e pulseiras em ouro 18k</title>
+  <meta name="description" content="LB18k. Correntes e pulseiras em ouro 18k, com fotos reais de cada peça e atendimento pelo WhatsApp.">
+  <meta name="theme-color" content="#141210">
+  <link rel="icon" href="assets/brand/lb18k-crest.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png?v=lb18k">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260929c">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="loja.css?v=20261007a">
   <link rel="preload" href="/api/catalog" as="fetch" crossorigin>
 </head>
 <body>
+  <p class="topline">Ouro 18k · <b>Atendimento pelo WhatsApp</b><span class="hours"> · Seg a Sex, 9h às 18h</span></p>
   <header class="site-header">
-    <div class="utility-bar">
-      <div class="utility-bar-inner">
-        <span class="utility-brand">LB jewelry</span>
-      </div>
+    <div class="header-row">
+      <a href="/" class="brand" aria-label="LB18k, início">
+        <img src="assets/brand/lb18k-crest.png" alt="" width="46" height="46">
+        <span><b>LB18k</b><small>18K Gold Jewelry</small></span>
+      </a>
+      <a class="icon-link" href="https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es." target="_blank" rel="noopener noreferrer" aria-label="Falar no WhatsApp">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5 6 15a7 7 0 1 1 3 3z"/></svg>
+      </a>
     </div>
-
-    <div class="main-header">
-      <div class="main-header-top">
-        <a href="index.html" class="logo" aria-label="LB jewelry">
-          <img src="assets/logo-lb.png" alt="LB jewelry" width="260" height="146">
-        </a>
-        <a class="header-icon-btn header-icon-btn--solo" href="/admin" aria-label="Área administrativa">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M4 20c1.5-4 14.5-4 16 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </a>
-      </div>
-      <div class="main-header-bottom">
-        <nav class="nav" aria-label="Menu principal">
-          <a href="#correntes" data-category-link="correntes">Correntes</a>
-          <a href="#brincos" data-category-link="brincos">Brincos</a>
-          <a href="#pulseiras" data-category-link="pulseiras">Pulseiras</a>
-          <a href="#aneis" data-category-link="aneis">Anéis</a>
-        </nav>
-      </div>
-    </div>
-
+    <nav class="nav" aria-label="Menu principal">
+      <a href="#promocoes" class="nav-promo" data-promo-link hidden>Ofertas</a>
+      <a href="#correntes" data-category-link="correntes">Correntes</a>
+      <a href="#pulseiras" data-category-link="pulseiras">Pulseiras</a>
+      <a href="#brincos" data-category-link="brincos">Brincos</a>
+      <a href="#aneis" data-category-link="aneis">Anéis</a>
+      <a href="#malhas" data-category-link="correntes">Malhas</a>
+    </nav>
   </header>
 
-  <section class="hero" aria-label="Destaques">
+  <section class="hero is-loading" aria-label="Destaques">
     <div class="hero-track"></div>
     <div class="hero-dots"></div>
   </section>
 
+  <div class="trust">
+    <div><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4h11L21 9l-9 11L3 9z"/><path d="M3 9h18M9.5 4 8 9l4 11 4-11-1.5-5"/></svg>Ouro 18k</div>
+    <div><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Fotos reais de cada peça</div>
+    <div><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5 6 15a7 7 0 1 1 3 3z"/></svg>Atendimento pelo WhatsApp</div>
+  </div>
+
   <main class="site-main">
-  <section class="chain-types" id="correntes-malha">
-    <div class="container">
-      <div class="chain-types-head">
-        <p>Encontre sua corrente por tipo de malha</p>
+    <section class="section" id="malhas" data-needs-category="correntes">
+      <div class="container">
+        <div class="sec-title center"><h2>Encontre pela malha</h2></div>
       </div>
-    </div>
-    <div class="chain-types-slider-wrap">
-      <button class="chain-types-arrow chain-types-arrow-left" type="button" aria-label="Anterior">
-        <svg width="6" height="11" viewBox="0 0 13 22" fill="none"><path d="M12 21L2 11L12 1" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <div class="chain-types-track-wrap">
-        <div class="chain-types-track">
-          <a class="chain-type-card" href="#correntes"><img src="assets/ba98a5ba1f78f425_404f3a8a-ee3a-44bb-9fde-34888b.webp" alt="Veneziana"><h3>Veneziana</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/71c039530472d4ed_5f0b7c87-5400-4006-8a33-54269b.webp" alt="Cadeado"><h3>Cadeado</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/9e670590c46cdb81_8761b3d1-e17a-4f29-9158-750acb.webp" alt="Groumet"><h3>Groumet</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/b586aa127bd0f97d_ac23ebd0-8ddd-4534-b608-004baa.webp" alt="Elos Portugueses"><h3>Elos Portugueses</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/fb810a842444a9d8_ec1575ea-dc91-40fb-a798-7ad116.webp" alt="Pop Corn"><h3>Pop Corn</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/40f740d589812e1c_e7e5eb9d-3ddb-4120-b306-4c72cc.webp" alt="Singapura"><h3>Singapura</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/6b6511a785447ceb_567c2a6f-97b1-4ac0-a911-b65d0d.webp" alt="Coffee"><h3>Coffee</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/9664835f7f30deba_c0718492-e3f3-42db-99ef-2ac651.webp" alt="Cordão Baiano"><h3>Cordão Baiano</h3></a>
-          <a class="chain-type-card" href="#correntes"><img src="assets/5e60aa2c268d8f8c_407264b7-78b8-4ce1-9b28-8ffd76.webp" alt="Cordino"><h3>Cordino</h3></a>
+      <div class="malhas">
+        <a class="malha" href="#correntes"><span><img src="assets/ba98a5ba1f78f425_404f3a8a-ee3a-44bb-9fde-34888b.webp" alt="" loading="lazy"></span><b>Veneziana</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/71c039530472d4ed_5f0b7c87-5400-4006-8a33-54269b.webp" alt="" loading="lazy"></span><b>Cadeado</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/9e670590c46cdb81_8761b3d1-e17a-4f29-9158-750acb.webp" alt="" loading="lazy"></span><b>Gourmet</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/b586aa127bd0f97d_ac23ebd0-8ddd-4534-b608-004baa.webp" alt="" loading="lazy"></span><b>Elos Portugueses</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/fb810a842444a9d8_ec1575ea-dc91-40fb-a798-7ad116.webp" alt="" loading="lazy"></span><b>Pop Corn</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/40f740d589812e1c_e7e5eb9d-3ddb-4120-b306-4c72cc.webp" alt="" loading="lazy"></span><b>Singapura</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/6b6511a785447ceb_567c2a6f-97b1-4ac0-a911-b65d0d.webp" alt="" loading="lazy"></span><b>Coffee</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/9664835f7f30deba_c0718492-e3f3-42db-99ef-2ac651.webp" alt="" loading="lazy"></span><b>Cordão Baiano</b></a>
+        <a class="malha" href="#correntes"><span><img src="assets/5e60aa2c268d8f8c_407264b7-78b8-4ce1-9b28-8ffd76.webp" alt="" loading="lazy"></span><b>Cordino</b></a>
+      </div>
+    </section>
+
+    <section class="section" id="colecoes">
+      <div class="container">
+        <div class="sec-title"><div><h2>Categorias</h2><p>Escolha por tipo de peça</p></div></div>
+        <div class="cats">
+          <a class="cat" href="#correntes" data-category-card="correntes" hidden><img data-category-cover="correntes" alt=""><span class="cat-label"><small data-category-count></small><b>Correntes</b></span></a>
+          <a class="cat" href="#pulseiras" data-category-card="pulseiras" hidden><img data-category-cover="pulseiras" alt=""><span class="cat-label"><small data-category-count></small><b>Pulseiras</b></span></a>
+          <a class="cat" href="#brincos" data-category-card="brincos" hidden><img data-category-cover="brincos" alt=""><span class="cat-label"><small data-category-count></small><b>Brincos</b></span></a>
+          <a class="cat" href="#aneis" data-category-card="aneis" hidden><img data-category-cover="aneis" alt=""><span class="cat-label"><small data-category-count></small><b>Anéis</b></span></a>
         </div>
       </div>
-      <button class="chain-types-arrow chain-types-arrow-right" type="button" aria-label="Próximo">
-        <svg width="6" height="11" viewBox="0 0 13 22" fill="none"><path d="M1 1L11 11L1 21" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-    </div>
-  </section>
+    </section>
 
-  <section class="categories" id="colecoes">
-    <div class="container">
-      <div class="section-title">
-        <h2>Categorias</h2>
-        <p>Correntes, brincos, pulseiras e anéis</p>
+    <section class="section shelf shelf--promo" id="promocoes" hidden>
+      <div class="container">
+        <div class="sec-title"><div><span class="kicker">Ofertas selecionadas</span><h2>Em oferta</h2></div></div>
+        <div class="product-grid" id="promo-grid"></div>
       </div>
-      <div class="category-grid">
-        <a class="category-card" href="#correntes">
-          <img data-category-cover="correntes" alt="Correntes">
-          <span>Correntes</span>
-        </a>
-        <a class="category-card" href="#brincos">
-          <img data-category-cover="brincos" alt="Brincos">
-          <span>Brincos</span>
-        </a>
-        <a class="category-card" href="#pulseiras">
-          <img data-category-cover="pulseiras" alt="Pulseiras">
-          <span>Pulseiras</span>
-        </a>
-        <a class="category-card" href="#aneis">
-          <img data-category-cover="aneis" alt="Anéis">
-          <span>Anéis</span>
-        </a>
+    </section>
+
+    <section class="section shelf" id="correntes" hidden>
+      <div class="container">
+        <div class="sec-title"><h2>Correntes</h2></div>
+        <div class="product-grid" data-category="correntes"></div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <nav class="shop-filters" aria-label="Filtrar por categoria">
-    <a href="#promocoes" class="shop-filters-promo" data-promo-link hidden>Promoções</a>
-    <a href="#correntes" data-category-link="correntes">Correntes</a>
-    <a href="#brincos" data-category-link="brincos">Brincos</a>
-    <a href="#pulseiras" data-category-link="pulseiras">Pulseiras</a>
-    <a href="#aneis" data-category-link="aneis">Anéis</a>
-  </nav>
-
-  <section class="shelf shelf--promo" id="promocoes" hidden>
-    <div class="container">
-      <div class="shelf-head shelf-head--promo">
-        <h2>Itens em promoção</h2>
-        <span class="promo-label">Ofertas selecionadas</span>
+    <section class="section shelf" id="pulseiras" hidden>
+      <div class="container">
+        <div class="sec-title"><h2>Pulseiras</h2></div>
+        <div class="product-grid" data-category="pulseiras"></div>
       </div>
-      <div class="product-grid product-grid--promo" id="promo-grid"></div>
-    </div>
-  </section>
+    </section>
 
-  <section class="shelf" id="correntes">
-    <div class="container">
-      <div class="shelf-head">
-        <h2>Correntes</h2>
+    <section class="section shelf" id="brincos" hidden>
+      <div class="container">
+        <div class="sec-title"><h2>Brincos</h2></div>
+        <div class="product-grid" data-category="brincos"></div>
       </div>
-      <div class="product-grid" data-category="correntes"></div>
-    </div>
-  </section>
+    </section>
 
-  <section class="shelf" id="brincos">
-    <div class="container">
-      <div class="shelf-head">
-        <h2>Brincos</h2>
+    <section class="section shelf" id="aneis" hidden>
+      <div class="container">
+        <div class="sec-title"><h2>Anéis e alianças</h2></div>
+        <div class="product-grid" data-category="aneis"></div>
       </div>
-      <div class="product-grid" data-category="brincos"></div>
-    </div>
-  </section>
-
-  <section class="shelf" id="pulseiras">
-    <div class="container">
-      <div class="shelf-head">
-        <h2>Pulseiras</h2>
-      </div>
-      <div class="product-grid" data-category="pulseiras"></div>
-    </div>
-  </section>
-
-  <section class="shelf" id="aneis">
-    <div class="container">
-      <div class="shelf-head">
-        <h2>Anéis e Alianças</h2>
-      </div>
-      <div class="product-grid" data-category="aneis"></div>
-    </div>
-  </section>
-
+    </section>
   </main>
 
   <div id="promo-popup" class="promo-popup" hidden>
@@ -167,7 +119,7 @@
       <button type="button" class="promo-popup-close" data-promo-close>Fechar</button>
       <div id="promo-step-form" class="promo-step">
         <div class="promo-popup-visual">
-          <img id="promo-popup-image" class="promo-popup-image" src="/assets/promo-coupon-setembro.jpg" alt="Mês de Setembro — correntes com 10% de desconto à vista">
+          <img id="promo-popup-image" class="promo-popup-image" src="/assets/promo-coupon-setembro.jpg" alt="">
         </div>
         <div class="promo-popup-body">
           <h2 id="promo-popup-title">Ganhe seu cupom</h2>
@@ -175,11 +127,11 @@
           <form id="promo-popup-form">
             <label>
               Nome
-              <input type="text" name="name" required autocomplete="name" placeholder="Seu nome">
+              <input type="text" name="name" id="promo-name" required autocomplete="name" placeholder="Seu nome">
             </label>
             <label>
               WhatsApp
-              <input type="tel" name="phone" required autocomplete="tel" placeholder="(11) 99999-9999">
+              <input type="tel" name="phone" id="promo-phone" required autocomplete="tel" placeholder="(48) 99999-9999">
             </label>
             <p id="promo-popup-error" class="promo-popup-error" hidden></p>
             <button type="submit" class="promo-popup-submit">Liberar cupom</button>
@@ -188,10 +140,10 @@
         </div>
       </div>
       <div id="promo-step-coupon" class="promo-step" hidden>
-        <p class="promo-popup-success">Seu cupom:</p>
+        <p class="promo-popup-success">Seu cupom</p>
         <p id="promo-coupon-code" class="promo-coupon-code"></p>
         <p id="promo-coupon-instruction" class="promo-coupon-instruction"></p>
-        <a id="promo-seller-whatsapp" class="promo-whatsapp-btn" href="https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es." target="_blank" rel="noopener noreferrer">Chamar vendedor no WhatsApp</a>
+        <a id="promo-seller-whatsapp" class="promo-whatsapp-btn" href="https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es." target="_blank" rel="noopener noreferrer">Chamar no WhatsApp</a>
         <button type="button" class="promo-popup-done" data-promo-close>Fechar</button>
       </div>
     </div>
@@ -199,14 +151,27 @@
 
   <footer class="footer">
     <div class="container footer-grid">
-      <div>
-        <h3>Contato</h3>
-        <p><a href="https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es." target="_blank" rel="noopener noreferrer">WhatsApp</a></p>
-        <p>Seg a Sex, 9h às 18h</p>
+      <div class="fbrand"><img src="assets/brand/lb18k-crest.png" alt="" width="64" height="64" loading="lazy"><div><b>LB18k</b><small>18K Gold Jewelry</small></div></div>
+      <div class="fcols">
+        <div>
+          <h3>Atendimento</h3>
+          <p><a href="https://wa.me/5548996363634?text=Ol%C3%A1%2C%20quero%20mais%20informa%C3%A7%C3%B5es." target="_blank" rel="noopener noreferrer">WhatsApp (48) 99636-3634</a></p>
+          <p>Seg a Sex, 9h às 18h</p>
+        </div>
+        <div>
+          <h3>Loja</h3>
+          <p data-category-link="correntes"><a href="#correntes">Correntes</a></p>
+          <p data-category-link="pulseiras"><a href="#pulseiras">Pulseiras</a></p>
+          <p data-category-link="brincos"><a href="#brincos">Brincos</a></p>
+          <p data-category-link="aneis"><a href="#aneis">Anéis</a></p>
+        </div>
+        <div>
+          <h3>LB18k</h3>
+          <p>Joias em ouro 18k</p>
+          <p>lbgold18k.com.br</p>
+        </div>
       </div>
-    </div>
-    <div class="container footer-bottom">
-      <p>© 2026 IA Oxyhouse</p>
+      <div class="fine"><span>© 2026 LB18k</span><a href="/admin">Área da loja</a></div>
     </div>
   </footer>
 
@@ -215,7 +180,7 @@
       <path fill="currentColor" d="M12.04 2C6.58 2 2.15 6.4 2.15 11.84c0 1.74.46 3.45 1.32 4.95L2 22l5.39-1.41a10 10 0 0 0 4.65 1.18h.01c5.46 0 9.89-4.4 9.89-9.85C21.94 6.4 17.5 2 12.04 2zm5.84 13.98c-.25.7-1.23 1.28-2.02 1.45-.52.11-1.2.2-3.49-.75-2.93-1.21-4.8-4.18-4.95-4.38-.14-.2-1.18-1.57-1.18-3 0-1.42.75-2.12 1.01-2.41.25-.28.66-.41 1.05-.41h.75c.24 0 .57-.1.89.68.33.8 1.12 2.76 1.22 2.96.1.2.16.43.03.7-.12.25-.19.41-.37.63-.19.22-.39.49-.56.66-.19.19-.38.4-.16.78.22.37 1 1.64 2.14 2.66 1.47 1.31 2.71 1.72 3.09 1.91.38.19.6.16.82-.1.22-.25.95-1.1 1.2-1.48.25-.37.5-.31.84-.19.33.12 2.12 1 2.48 1.18.36.18.6.27.69.42.09.16.09.91-.16 1.61z"/>
     </svg>
   </a>
-  <script src="catalog.js?v=20260928j"></script>
-  <script src="app.js?v=20260929c"></script>
+  <script src="catalog.js?v=20261007a"></script>
+  <script src="app.js?v=20261007a"></script>
 </body>
 </html>

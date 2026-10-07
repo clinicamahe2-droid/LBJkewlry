@@ -35,18 +35,18 @@ function productPriceHtml(product) {
     return `
       <p class="product-price product-price--promo">
         <span class="product-price-old">${formatPrice(product.priceList)}</span>
-        <span class="product-price-current">${formatPrice(product.priceMin)}${hasRange ? ` — ${formatPrice(product.priceMax)}` : ""}</span>
+        <span class="product-price-current">${formatPrice(product.priceMin)}${hasRange ? ` a ${formatPrice(product.priceMax)}` : ""}</span>
       </p>`;
   }
-  return `<p class="product-price">${formatPrice(product.priceMin)}${hasRange ? ` — ${formatPrice(product.priceMax)}` : ""}</p>`;
+  return `<p class="product-price">${formatPrice(product.priceMin)}${hasRange ? ` a ${formatPrice(product.priceMax)}` : ""}</p>`;
 }
 
 function productCardHtml(product) {
   const isPromo = isPromoProduct(product);
   const badge = product.badge === "new"
-    ? `<span class="product-badge new">LANÇAMENTO</span>`
+    ? `<span class="product-badge new">Novidade</span>`
     : isPromo
-      ? `<span class="product-badge sale">SALE</span>`
+      ? `<span class="product-badge sale">Oferta</span>`
       : "";
   const cover = product.image || product.images?.[0] || "";
   const hover = (product.images || []).find((src) => src && src !== cover) || "";
@@ -57,8 +57,8 @@ function productCardHtml(product) {
       <a class="product-card-link" href="${href}">
         <div class="product-card-image">
           ${badge}
-          ${cover ? `<img class="product-image-main" src="${escapeHtml(cover)}" alt="${escapeHtml(product.name)}">` : ""}
-          ${hover ? `<img class="product-image-hover" src="${escapeHtml(hover)}" alt="">` : ""}
+          ${cover ? `<img class="product-image-main" src="${escapeHtml(cover)}" alt="${escapeHtml(product.name)}" loading="lazy">` : ""}
+          ${hover ? `<img class="product-image-hover" src="${escapeHtml(hover)}" alt="" loading="lazy">` : ""}
         </div>
         <div class="product-card-body">
           <p class="product-category">${escapeHtml(product.category || "")}</p>
@@ -66,7 +66,6 @@ function productCardHtml(product) {
           ${productPriceHtml(product)}
         </div>
       </a>
-      <a class="product-cta" href="${href}">VER MAIS</a>
     </article>`;
 }
 

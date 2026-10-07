@@ -20,9 +20,6 @@ releaseStorefrontWorker();
 const heroSection = document.querySelector(".hero");
 const heroTrack = document.querySelector(".hero-track");
 const heroDots = document.querySelector(".hero-dots");
-const track = document.querySelector(".chain-types-track");
-const btnLeft = document.querySelector(".chain-types-arrow-left");
-const btnRight = document.querySelector(".chain-types-arrow-right");
 let currentSlide = 0;
 let slideTimer;
 
@@ -43,11 +40,16 @@ function prepareBanners(banners) {
       }
       return banner;
     })
-    .sort((a, b) => {
-      if (a.type === "video" && b.type !== "video") return -1;
-      if (b.type === "video" && a.type !== "video") return 1;
-      return 0;
-    });
+    .filter((banner) => banner.image || banner.video);
+}
+
+const CATEGORY_NAMES = { correntes: "Correntes", pulseiras: "Pulseiras", brincos: "Brincos", aneis: "Anéis" };
+let heroCategories = ["correntes", "pulseiras"];
+
+function heroCtasHtml() {
+  return heroCategories.slice(0, 2).map((slug, index) => (
+    `<a class="btn ${index === 0 ? "btn-light" : "btn-line"}" href="#${slug}">Ver ${CATEGORY_NAMES[slug].toLowerCase()}</a>`
+  )).join("");
 }
 
 function revealHero() {
@@ -147,11 +149,16 @@ function setupHero(banners) {
     const media = banner.type === "video" && banner.video
       ? `<video class="hero-video" muted loop autoplay playsinline webkit-playsinline preload="${index === 0 ? "auto" : "metadata"}" aria-label="${label}"${poster}><source src="${escapeHtml(banner.video)}" type="video/mp4"></video>`
       : `<img src="${escapeHtml(banner.image)}" alt="${label}">`;
+    const title = banner.title
+      ? escapeHtml(banner.title)
+      : "Brilho para usar <em>todos os dias</em>";
     return `
     <div class="hero-slide">
-      ${media}
-      <div class="hero-caption">
-        <h2>${escapeHtml(banner.title)}</h2>
+      <div class="hero-media">${media}</div>
+      <div class="hero-copy">
+        <span class="kicker">Ouro 18k · peças únicas</span>
+        <h2>${title}</h2>
+        <div class="hero-ctas">${heroCtasHtml()}</div>
       </div>
     </div>
   `;
@@ -160,9 +167,9 @@ function setupHero(banners) {
   heroTrack.querySelectorAll(".hero-video").forEach(bindHeroVideo);
   armHeroPlaybackOnInteraction();
 
-  heroDots.innerHTML = slides.map((_, index) => `
+  heroDots.innerHTML = slides.length > 1 ? slides.map((_, index) => `
     <button class="hero-dot${index === 0 ? " active" : ""}" type="button" aria-label="Slide ${index + 1}"></button>
-  `).join("");
+  `).join("") : "";
 
   const dots = document.querySelectorAll(".hero-dot");
   const total = slides.length;
@@ -191,29 +198,36 @@ function isSellable(product) {
   return Number(product.stock) > 0 && product.showOnHome !== false;
 }
 
+// Capa da categoria: a foto "Em uso" (3ª) de uma peça à venda; sem ela, a capa da peça.
+function categoryCover(items) {
+  const worn = items.find((product) => product.images?.[2]);
+  if (worn) return worn.images[2];
+  return items.find((product) => product.image)?.image || "";
+}
+
 function renderCategoryCovers(products) {
-  document.querySelectorAll("[data-category-cover]").forEach((img) => {
-    const item = products.find((product) => (
-      product.categorySlug === img.dataset.categoryCover &&
-      isSellable(product) &&
-      product.image
-    ));
-    const card = img.closest(".category-card");
-    if (!item) {
-      card?.setAttribute("hidden", "");
+  const sellableIn = (slug) => products.filter((product) => product.categorySlug === slug && isSellable(product));
+
+  document.querySelectorAll("[data-category-card]").forEach((card) => {
+    const items = sellableIn(card.dataset.categoryCard);
+    const cover = categoryCover(items);
+    if (!items.length || !cover) {
+      card.hidden = true;
       return;
     }
-    img.src = item.image;
-    img.alt = item.category || img.alt;
-    card?.removeAttribute("hidden");
+    const img = card.querySelector("[data-category-cover]");
+    img.src = cover;
+    img.alt = items[0].category || "";
+    card.querySelector("[data-category-count]").textContent = `${items.length} ${items.length === 1 ? "peça" : "peças"}`;
+    card.hidden = false;
   });
 
-  document.querySelectorAll("[data-category-link]").forEach((link) => {
-    const visible = products.some((product) => (
-      product.categorySlug === link.dataset.categoryLink && isSellable(product)
-    ));
-    link.hidden = !visible;
+  document.querySelectorAll("[data-category-link], [data-needs-category]").forEach((node) => {
+    node.hidden = !sellableIn(node.dataset.categoryLink || node.dataset.needsCategory).length;
   });
+
+  const withStock = Object.keys(CATEGORY_NAMES).filter((slug) => sellableIn(slug).length);
+  if (withStock.length) heroCategories = withStock;
 }
 
 function renderShelves(products) {
@@ -245,18 +259,6 @@ function renderPromoShelf(products) {
   section.hidden = false;
   grid.innerHTML = items.map(productCardHtml).join("");
   document.querySelector("[data-promo-link]")?.removeAttribute("hidden");
-}
-
-function setupChainSlider() {
-  function scrollTrack(direction) {
-    const amount = track.clientWidth * 0.6;
-    track.scrollBy({ left: direction * amount, behavior: "smooth" });
-  }
-
-  if (btnLeft && btnRight && track) {
-    btnLeft.addEventListener("click", () => scrollTrack(-1));
-    btnRight.addEventListener("click", () => scrollTrack(1));
-  }
 }
 
 const PROMO_STORAGE_KEY = "lb_promo_coupon";
@@ -319,7 +321,7 @@ function setupPromoPopup(promoPopup) {
   const imageSrc = promoImageSrc(promoPopup.image);
   if (image) {
     image.src = imageSrc;
-    image.alt = promoPopup.headline || "Promoção LB jewelry";
+    image.alt = promoPopup.headline || "Promoção LB18k";
   }
   const visual = document.querySelector(".promo-popup-visual");
   if (visual) {
@@ -368,18 +370,16 @@ function setupPromoPopup(promoPopup) {
   }, 700);
 }
 
-setupChainSlider();
-
 fetchCatalog()
   .then((catalog) => {
-    setupHero(catalog.banners);
     renderCategoryCovers(catalog.products);
+    setupHero(catalog.banners);
     renderPromoShelf(catalog.products);
     renderShelves(catalog.products);
     setupPromoPopup(catalog.promoPopup);
   })
   .catch(() => {
     if (heroTrack && !heroTrack.children.length) {
-      heroTrack.innerHTML = "<div class='hero-slide'><div class='hero-caption'><h2>LB jewelry</h2></div></div>";
+      heroSection?.setAttribute("hidden", "");
     }
   });
