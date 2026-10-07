@@ -63,7 +63,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   border-bottom: 1px solid var(--line);
 }
 .header-row { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 10px 12px 6px; max-width: var(--max); margin: 0 auto; }
-.brand { display: flex; align-items: center; justify-content: center; gap: 10px; grid-column: 2; }
+.brand { display: flex; align-items: center; justify-content: center; gap: 10px; grid-column: 2; grid-row: 1; }
 .brand img { width: 40px; height: 40px; }
 .brand b { display: block; font: 600 23px/1 var(--display); letter-spacing: .06em; }
 .brand small { display: block; font-size: 8.5px; letter-spacing: .32em; color: var(--gold); margin-top: 4px; text-transform: uppercase; }
