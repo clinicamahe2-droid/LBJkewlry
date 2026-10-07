@@ -1563,12 +1563,13 @@ document.addEventListener("visibilitychange", () => {
 
 // ---------- tema ----------
 function currentTheme() {
-  try { const t = localStorage.getItem("lb-admin-theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; }
+  // Sem escolha salva, o painel abre no tema claro.
+  try { const t = localStorage.getItem("lb-admin-theme"); return t === "auto" || t === "dark" ? t : "light"; } catch { return "light"; }
 }
 function applyTheme(theme) {
   const root = document.documentElement;
   if (theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", theme);
-  try { if (theme === "auto") localStorage.removeItem("lb-admin-theme"); else localStorage.setItem("lb-admin-theme", theme); } catch {}
+  try { localStorage.setItem("lb-admin-theme", theme); } catch {}
   const dark = theme === "dark" || (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   $$('meta[name="theme-color"]').forEach((m) => { m.content = theme === "auto" ? (m.media.includes("dark") ? "#0F0D0A" : "#F7F5F0") : dark ? "#0F0D0A" : "#F7F5F0"; });
   $$("#theme-seg [data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themePick === theme)));
