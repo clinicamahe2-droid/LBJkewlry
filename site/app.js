@@ -222,8 +222,8 @@ function renderCategoryCovers(products) {
     card.hidden = false;
   });
 
-  document.querySelectorAll("[data-category-link], [data-needs-category]").forEach((node) => {
-    node.hidden = !sellableIn(node.dataset.categoryLink || node.dataset.needsCategory).length;
+  document.querySelectorAll("[data-category-link]").forEach((node) => {
+    node.hidden = !sellableIn(node.dataset.categoryLink).length;
   });
 
   const withStock = Object.keys(CATEGORY_NAMES).filter((slug) => sellableIn(slug).length);
