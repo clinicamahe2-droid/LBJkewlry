@@ -229,6 +229,7 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .facts > div + div { border-left: 1px solid var(--line); }
 .facts b { font-weight: 600; font-size: clamp(13px, 3.9vw, 15px); white-space: nowrap; }
 .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.actions--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .act { display: grid; justify-items: center; gap: 6px; padding: 12px 4px 10px; border-radius: 14px; border: 1px solid var(--line); font-size: 11.5px; font-weight: 500; color: var(--ink-2); background: var(--raised); }
 .act svg { color: var(--ink); }
 .act.main { background: var(--ink); color: var(--ground); border-color: var(--ink); }

@@ -340,7 +340,16 @@ function renderHome() {
 }
 
 // ---- peças ----
+function salesOfProduct(p) {
+  return catalog.sales.filter((s) => s.productId === p.id && s.type !== "fiado_payment").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+const buyerOf = (s) => s.clientName || (s.clientId ? clientOf(s).name : "") || "";
 function rowProduct(p) {
+  if (!isAvailable(p)) {
+    const last = salesOfProduct(p)[0];
+    const meta = last ? `Vendida${buyerOf(last) ? ` para ${esc(buyerOf(last))}` : ""} · ${fmtDate(last.createdAt)}${last.type === "fiado" ? " · fiado" : ""}` : "Sem estoque";
+    return `<button class="rowi" type="button" data-product="${esc(p.id)}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${meta}</span></span><span class="end">${money(last ? last.unitPrice || p.priceMin : p.priceMin)}<span class="pill">Vendida</span></span></button>`;
+  }
   const tags = [];
   if (p.active === false) tags.push('<span class="warn">inativa</span>');
   if (needsPhoto(p)) tags.push('<span class="warn">sem mostruário</span>');
@@ -686,20 +695,38 @@ function sheetProduct(id) {
   const photos = photosOf(p);
   const missing = missingPhotos(p);
   const margin = num(p.priceMin) - num(p.cost);
-  const pills = [`<span class="pill">${esc(p.category || "")}</span>`, p.showOnHome !== false ? '<span class="pill green">Na home</span>' : '<span class="pill">Fora da home</span>'];
+  const sold = !isAvailable(p);
+  const sales = salesOfProduct(p);
+  const pills = [`<span class="pill">${esc(p.category || "")}</span>`];
+  if (sold) pills.push('<span class="pill amber">Vendida · fora da loja</span>');
+  else pills.push(p.showOnHome !== false ? '<span class="pill green">Na home</span>' : '<span class="pill">Fora da home</span>');
   if (p.active === false) pills.push('<span class="pill amber">Inativa</span>');
-  if (isPromo(p)) pills.push('<span class="pill red">Oferta</span>');
+  if (isPromo(p) && !sold) pills.push('<span class="pill red">Oferta</span>');
+  const saleRows = sales.map((s) => {
+    const k = saleKind(s);
+    const who = buyerOf(s);
+    const target = s.type === "fiado" && s.fiadoId && catalog.fiado.some((e) => e.id === s.fiadoId) ? `data-fiado="${esc(s.fiadoId)}"` : `data-sale="${esc(s.id)}"`;
+    return `<button class="rowi rowi--plain" type="button" ${target}><span class="avatar">${esc(initials(who || "?"))}</span><span class="mid"><span class="name">${who ? esc(who) : '<span style="color:var(--muted)">Cliente não informado</span>'}</span><span class="meta">${fmtDateFull(s.createdAt)}${num(s.quantity) > 1 ? ` · ${s.quantity} un.` : ""}</span></span><span class="end">${money(s.total)}<span class="pill ${k.cls}">${esc(k.label)}</span></span></button>`;
+  }).join("");
   openSheet(p.name, `
     <div class="prod-head">${thumbHtml(p)}<div class="stack-sm">${hasSalePrice(p) ? `<span class="hint"><s>${moneyTxt(p.priceList)}</s></span>` : ""}${money(p.priceMin)}${num(p.priceMax) !== num(p.priceMin) ? `<span class="hint">até ${moneyTxt(p.priceMax)}</span>` : ""}<div class="pills">${pills.join("")}</div></div></div>
     <div class="facts"><div><span class="label">Estoque</span><b>${isAvailable(p) ? `${p.stock} un.` : "Vendida"}</b></div><div><span class="label">Custo</span><b>${num(p.cost) ? moneyTxt(p.cost) : "—"}</b></div><div><span class="label">Margem</span><b style="color:${margin >= 0 ? "var(--esmeralda)" : "var(--granada)"}">${num(p.cost) ? moneyTxt(margin) : "—"}</b></div></div>
     <button class="photo-row" type="button" data-edit-product="${esc(p.id)}"><span><b>Fotos na loja · ${photos.length} de 3</b>${missing.length ? `<small class="warn">Falta: ${missing.join(" e ")}</small>` : `<small>Peça, mostruário${photos.length > 2 ? " e em uso" : ""}</small>`}</span><span class="mini-photos">${[0, 1, 2].map((k) => (photos[k] ? `<img src="${esc(photos[k])}" alt="">` : '<span class="gap"></span>')).join("")}</span></button>
+    ${sold ? `
+    <div class="field"><span class="field-label">${sales.length > 1 ? `Vendas · ${sales.length}` : "Vendida para"}</span>${sales.length ? `<div class="group">${saleRows}</div>` : '<p class="hint">Nenhuma venda registrada para esta peça.</p>'}</div>
+    <p class="hint">Saiu da loja sozinha quando o estoque zerou. Se repor o estoque, ela volta a aparecer.</p>
+    <div class="actions actions--two">
+      <button class="act" type="button" data-edit-product="${esc(p.id)}">${icon("edit")}Editar</button>
+      <button class="act main" type="button" data-restock="${esc(p.id)}">${icon("box")}Repor estoque</button>
+    </div>` : `
     <div class="actions">
-      <button class="act main" type="button" data-sell="${esc(p.id)}" ${isAvailable(p) ? "" : "disabled"}>${icon("bag")}Vender</button>
-      <button class="act" type="button" data-sell-fiado="${esc(p.id)}" ${isAvailable(p) ? "" : "disabled"}>${icon("hand")}Fiado</button>
+      <button class="act main" type="button" data-sell="${esc(p.id)}">${icon("bag")}Vender</button>
+      <button class="act" type="button" data-sell-fiado="${esc(p.id)}">${icon("hand")}Fiado</button>
       <button class="act" type="button" data-edit-product="${esc(p.id)}">${icon("edit")}Editar</button>
       <button class="act" type="button" data-restock="${esc(p.id)}">${icon("box")}Repor</button>
     </div>
     <div class="switch-row"><span><b>Mostrar na página principal</b><small>A peça aparece na home da loja</small></span><button class="switch" type="button" role="switch" aria-checked="${p.showOnHome !== false}" data-toggle-home="${esc(p.id)}" aria-label="Mostrar na página principal"></button></div>
+    ${sales.length ? `<p class="hint">Já vendida ${plural(sales.length, "vez", "vezes")}: última para ${esc(buyerOf(sales[0]) || "cliente não informado")} em ${fmtDateFull(sales[0].createdAt)}.</p>` : ""}`}
     ${p.description ? `<p class="hint">${esc(p.description)}</p>` : ""}
     <button class="danger-link" type="button" data-delete-product="${esc(p.id)}">${icon("trash", "i-sm")}Excluir peça</button>`);
 }
