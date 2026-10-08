@@ -471,6 +471,16 @@ function normalizeClient(input, existingId) {
   };
 }
 
+// Custo informado na venda; sem ele, vale o custo cadastrado na peça.
+// Se a peça ainda não tem custo, o informado passa a ser o custo dela.
+function saleUnitCost(product, input) {
+  const raw = input?.unitCost;
+  const informed = raw === undefined || raw === null || raw === "" ? NaN : toNumber(raw);
+  if (!(informed >= 0)) return Math.max(0, toNumber(product.cost));
+  if (!(toNumber(product.cost) > 0) && informed > 0) product.cost = informed;
+  return informed;
+}
+
 function findClient(catalog, clientId) {
   const client = catalog.clients.find((item) => item.id === clientId);
   if (!client) {
@@ -536,16 +546,21 @@ async function recordSale(input) {
   }
 
   const unitPrice = Math.max(0, toNumber(input.unitPrice) || product.priceMin);
+  const clientId = stripTags(input.clientId);
+  const client = clientId ? findClient(catalog, clientId) : null;
+  const unitCost = saleUnitCost(product, input);
   product.stock -= quantity;
 
   const sale = {
     id: newId("sale"),
     type: "cash",
+    clientId: client?.id,
+    clientName: client?.name,
     productId: product.id,
     productName: product.name,
     quantity,
     unitPrice,
-    unitCost: Math.max(0, toNumber(product.cost)),
+    unitCost,
     paymentMethod: stripTags(input.paymentMethod),
     total: unitPrice * quantity,
     createdAt: new Date().toISOString()
@@ -582,6 +597,7 @@ async function recordFiadoSale(input) {
     throw new Error("Informe a data do próximo vencimento.");
   }
 
+  const unitCost = saleUnitCost(product, input);
   product.stock -= quantity;
   const now = new Date().toISOString();
   const fiadoId = newId("fiado");
@@ -604,7 +620,7 @@ async function recordFiadoSale(input) {
     nextDueDate: balance > 0 ? nextDueDate : "",
     installmentAmount: balance > 0 ? Math.max(0, toNumber(input.installmentAmount)) : 0,
     notes: stripTags(input.notes),
-    unitCost: Math.max(0, toNumber(product.cost)),
+    unitCost,
     paymentMethod: stripTags(input.paymentMethod),
     payments,
     createdAt: now
@@ -620,7 +636,7 @@ async function recordFiadoSale(input) {
     productName: product.name,
     quantity,
     unitPrice,
-    unitCost: Math.max(0, toNumber(product.cost)),
+    unitCost,
     paymentMethod: stripTags(input.paymentMethod),
     total,
     paidAtSale: downPayment,

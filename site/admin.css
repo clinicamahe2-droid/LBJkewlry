@@ -399,3 +399,4 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
   .facts b { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.field-label .opt { font-size: 10.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); margin-left: 4px; }

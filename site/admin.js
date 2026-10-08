@@ -369,7 +369,7 @@ function renderPecas() {
   $("#pecas-view").innerHTML = `<button type="button" data-pecas-view="available" aria-pressed="${st.view === "available"}">Disponíveis<small>${available.length}</small></button><button type="button" data-pecas-view="sold" aria-pressed="${st.view === "sold"}">Vendidas<small>${sold.length}</small></button>`;
   const pool = pecasPool();
   const filters = [["all", "Todas", pool.length], ...CATEGORIES.map((c) => [c.slug, c.label, pool.filter((p) => p.categorySlug === c.slug).length])];
-  const extra = [["promo", "Promoção", pool.filter(isPromo).length], ["home", "Na home", pool.filter((p) => p.showOnHome !== false).length], ["inactive", "Inativas", pool.filter((p) => p.active === false).length]];
+  const extra = [["promo", "Promoção", pool.filter(isPromo).length], ["home", "No site", pool.filter((p) => p.showOnHome !== false).length], ["inactive", "Inativas", pool.filter((p) => p.active === false).length]];
   const fotos = pool.filter((p) => photosOf(p).length < 2 && isAvailable(p) && p.active !== false).length;
   $("#pecas-chips").innerHTML = filters.filter(([id, , n]) => id === "all" || n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
     + extra.filter(([, , n]) => n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
@@ -729,7 +729,7 @@ function sheetProduct(id) {
   const sales = salesOfProduct(p);
   const pills = [`<span class="pill">${esc(p.category || "")}</span>`];
   if (sold) pills.push('<span class="pill amber">Vendida · fora da loja</span>');
-  else pills.push(p.showOnHome !== false ? '<span class="pill green">Na home</span>' : '<span class="pill">Fora da home</span>');
+  else pills.push(p.showOnHome !== false ? '<span class="pill green">No site</span>' : '<span class="pill">Fora do site</span>');
   if (p.active === false) pills.push('<span class="pill amber">Inativa</span>');
   if (isPromo(p) && !sold) pills.push('<span class="pill red">Oferta</span>');
   const saleRows = sales.map((s) => {
@@ -755,7 +755,7 @@ function sheetProduct(id) {
       <button class="act" type="button" data-edit-product="${esc(p.id)}">${icon("edit")}Editar</button>
       <button class="act" type="button" data-restock="${esc(p.id)}">${icon("box")}Repor</button>
     </div>
-    <div class="switch-row"><span><b>Mostrar na página principal</b><small>A peça aparece na home da loja</small></span><button class="switch" type="button" role="switch" aria-checked="${p.showOnHome !== false}" data-toggle-home="${esc(p.id)}" aria-label="Mostrar na página principal"></button></div>
+    <div class="switch-row"><span><b>Mostrar no site</b><small>A peça aparece na loja lbgold18k.com.br</small></span><button class="switch" type="button" role="switch" aria-checked="${p.showOnHome !== false}" data-toggle-home="${esc(p.id)}" aria-label="Mostrar no site"></button></div>
     ${sales.length ? `<p class="hint">Já vendida ${plural(sales.length, "vez", "vezes")}: última para ${esc(buyerOf(sales[0]) || "cliente não informado")} em ${fmtDateFull(sales[0].createdAt)}.</p>` : ""}`}
     ${p.description ? `<p class="hint">${esc(p.description)}</p>` : ""}
     <button class="danger-link" type="button" data-delete-product="${esc(p.id)}">${icon("trash", "i-sm")}Excluir peça</button>`);
@@ -790,7 +790,7 @@ function sheetEditProduct(id) {
     <p class="hint" id="ed-margin"></p>
     <div class="two"><div class="field"><span class="field-label">Estoque</span>${stepper("ed-stock", p ? num(p.stock) : 1, 0, 999)}</div><label class="field"><span class="field-label">Código</span><input class="input" id="ed-sku" value="${esc(p?.sku || "")}" placeholder="SKU"></label></div>
     <div class="field"><span class="field-label">Selo na foto</span>${segHtml("badge", [["", "Nenhum"], ["sale", "Sale"], ["new", "Lançamento"]], draft.badge)}</div>
-    <div class="switch-row"><span><b>Na página principal</b><small>Destaque na home da loja</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.home}" data-draft-switch="home" aria-label="Na página principal"></button></div>
+    <div class="switch-row"><span><b>Mostrar no site</b><small>A peça aparece na loja lbgold18k.com.br</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.home}" data-draft-switch="home" aria-label="Mostrar no site"></button></div>
     <div class="switch-row"><span><b>Peça ativa</b><small>Desligada, some da loja sem apagar</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.active}" data-draft-switch="active" aria-label="Peça ativa"></button></div>
     <label class="field"><span class="field-label">Descrição</span><textarea class="input" id="ed-desc" placeholder="Material, medidas, fecho">${esc(p?.description || "")}</textarea></label>
     <details class="more"${p && (num(p.priceMax) !== num(p.priceMin) || hasSalePrice(p)) ? " open" : ""}><summary>Mais detalhes</summary><div class="more-body">
@@ -897,15 +897,19 @@ function fillProductPick(prefix) {
   list.innerHTML = (items.length ? items.map((p) => `<button class="rowi" type="button" data-pick-product="${esc(p.id)}" data-prefix="${prefix}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${esc(p.category)} · ${p.stock} un.</span></span><span class="end">${money(p.priceMin)}</span></button>`).join("") : `<p class="empty">Nenhuma peça disponível com esse nome.</p>`) + (more > 0 ? `<p class="pick-more">Mais ${plural(more, "peça", "peças")}: digite o nome para filtrar</p>` : "");
 }
 function sheetSale(productId = "") {
-  draft = { kind: "sale", productId };
+  draft = { kind: "sale", productId, clientId: "", newClient: false };
   const p = productById(productId);
   openSheet("Registrar venda", `
     <div class="field"><span class="field-label">Peça</span><div id="sale-picker">${productPickerHtml(productId, "sp")}</div></div>
-    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
+
+    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><label class="field"><span class="field-label">Custo (cada)</span><input class="input money-in" id="sale-cost" inputmode="decimal" value="${num(p?.cost) ? moneyInput(p.cost) : ""}" placeholder="0"></label></div>
+    <div class="two"><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
     <p class="hint" id="sale-margin"></p>
-    <div class="field"><span class="field-label">Pagamento</span>${segHtml("pay", [...PAYMENT_METHODS.map((m) => [m, m]), ["", "Outro"]], "PIX")}</div>`,
+    <div class="field"><span class="field-label">Pagamento</span>${segHtml("pay", [...PAYMENT_METHODS.map((m) => [m, m]), ["", "Outro"]], "PIX")}</div>
+    <div class="field"><span class="field-label">Cliente <small class="opt">opcional</small></span><div id="fs-client"></div></div>`,
     `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--gold" type="button" data-save-sale>Confirmar venda</button>`,
     { back: productId ? () => sheetProduct(productId) : null });
+  renderClientPicker();
   bindSaleForm("sp");
 }
 function bindSaleForm(prefix) {
@@ -916,13 +920,16 @@ function bindSaleForm(prefix) {
     const el = $("#sale-margin");
     if (!el) return;
     const price = parseMoney($("#sale-price").value);
+    const cost = parseMoney($("#sale-cost")?.value) || 0;
     const qty = Math.max(1, num($("#sale-qty").value));
     if (!p || !(price > 0)) { el.innerHTML = ""; return; }
     const parts = [`Total <b style="color:var(--ink)">${moneyTxt(price * qty)}</b>`];
-    if (num(p.cost)) parts.push(`margem <b class="${price - num(p.cost) < 0 ? "neg" : ""}">${moneyTxt((price - num(p.cost)) * qty)}</b> (${Math.round((price - num(p.cost)) / price * 100)}%)`);
+    if (cost > 0) parts.push(`margem <b class="${price - cost < 0 ? "neg" : ""}">${moneyTxt((price - cost) * qty)}</b> (${Math.round((price - cost) / price * 100)}%)`);
+    else parts.push("informe o custo para ver a margem");
     el.innerHTML = parts.join(" · ");
   };
   $("#sale-price")?.addEventListener("input", update);
+  $("#sale-cost")?.addEventListener("input", update);
   $("#sale-qty")?.addEventListener("input", update);
   draft.updateTotals = update;
   update();
@@ -932,21 +939,40 @@ function pickProduct(id, prefix) {
   draft.productId = id;
   $(prefix === "sp" ? "#sale-picker" : "#fs-picker").innerHTML = productPickerHtml(id, prefix);
   $("#sale-price").value = moneyInput(p.priceMin);
+  if ($("#sale-cost")) $("#sale-cost").value = num(p.cost) ? moneyInput(p.cost) : "";
   const qty = $("#sale-qty");
   qty.max = p.stock;
   if (num(qty.value) > num(p.stock)) qty.value = p.stock;
   draft.updateTotals?.();
+}
+function saleCostInput() {
+  const raw = ($("#sale-cost")?.value || "").trim();
+  if (!raw) return { ok: true, value: "" };
+  const value = parseMoney(raw);
+  return { ok: !Number.isNaN(value) && value >= 0, value };
 }
 async function saveSale(btn) {
   const p = productById(draft.productId);
   if (!p) return sheetError("Escolha a peça vendida.");
   const unitPrice = parseMoney($("#sale-price").value);
   const quantity = Math.floor(num($("#sale-qty").value));
+  const cost = saleCostInput();
   if (!(unitPrice > 0)) return sheetError("Informe o valor da venda.");
+  if (!cost.ok) return sheetError("Confira o custo da peça.");
   if (quantity < 1) return sheetError("Informe a quantidade.");
   if (quantity > num(p.stock)) return sheetError(`Estoque insuficiente: há ${p.stock} un.`);
+  let clientId = draft.clientId;
+  const newName = $("#nc-name")?.value.trim();
+  const newPhone = $("#nc-phone")?.value.trim();
+  if (!clientId && draft.newClient && (newName || newPhone) && (!newName || phoneDigits(newPhone).length < 10)) return sheetError("Informe nome e telefone com DDD do cliente novo.");
   await busy(btn, async () => {
-    await request("/api/admin/sales", { method: "POST", body: JSON.stringify({ productId: p.id, quantity, unitPrice, paymentMethod: segValue("pay") }) });
+    if (!clientId && draft.newClient && newName) {
+      const c = await request("/api/admin/clients", { method: "POST", body: JSON.stringify({ name: newName, phone: newPhone }) });
+      clientId = c.id;
+      draft.clientId = clientId;
+      draft.newClient = false;
+    }
+    await request("/api/admin/sales", { method: "POST", body: JSON.stringify({ productId: p.id, quantity, unitPrice, unitCost: cost.value, clientId, paymentMethod: segValue("pay") }) });
     await loadCatalog();
     closeSheet();
     toast(`Venda de ${moneyTxt(unitPrice * quantity)} registrada`);
@@ -969,7 +995,7 @@ function fillClientPick() {
   if (!list) return;
   const q = ($("#cp-q")?.value || "").trim().toLowerCase();
   const all = catalog.clients.filter((c) => !q || `${c.name} ${c.phone}`.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const items = all.slice(0, 7);
+  const items = all.slice(0, draft?.kind === "sale" && !q ? 3 : 7);
   list.innerHTML = `<button class="rowi rowi--plain" type="button" data-new-client-inline><span class="avatar">${icon("user-plus", "i-sm")}</span><span class="mid"><span class="name">Cadastrar cliente novo</span><span class="meta">Nome e telefone</span></span></button>`
     + items.map((c) => `<button class="rowi rowi--plain" type="button" data-pick-client="${esc(c.id)}"><span class="avatar">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${esc(fmtPhone(c.phone))}</span></span></button>`).join("")
     + (all.length > items.length ? `<p class="pick-more">Mais ${plural(all.length - items.length, "cliente", "clientes")}: digite o nome para filtrar</p>` : "");
@@ -985,7 +1011,8 @@ function sheetFiadoSale(productId = "", clientId = "") {
   openSheet("Venda no fiado", `
     <div class="field"><span class="field-label">Cliente</span><div id="fs-client"></div></div>
     <div class="field"><span class="field-label">Peça</span><div id="fs-picker">${productPickerHtml(productId, "fp")}</div></div>
-    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
+    <div class="two"><label class="field"><span class="field-label">Valor (cada)</span><input class="input money-in" id="sale-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><label class="field"><span class="field-label">Custo (cada)</span><input class="input money-in" id="sale-cost" inputmode="decimal" value="${num(p?.cost) ? moneyInput(p.cost) : ""}" placeholder="0"></label></div>
+    <div class="two"><div class="field"><span class="field-label">Quantidade</span>${stepper("sale-qty", 1, 1, p ? num(p.stock) : 99)}</div></div>
     <p class="hint" id="sale-margin"></p>
     <div class="two"><label class="field"><span class="field-label">Entrada</span><input class="input money-in" id="fs-entry" inputmode="decimal" placeholder="0"></label><label class="field"><span class="field-label">1º vencimento</span><input class="input" id="fs-due" type="date" value="${addDays(localISO(), 30)}"></label></div>
     <div class="field"><span class="field-label">Entrada paga em</span>${segHtml("pay", [...PAYMENT_METHODS.map((m) => [m, m]), ["", "Outro"]], "PIX")}</div>
@@ -1003,7 +1030,9 @@ async function saveFiadoSale(btn) {
   const downPayment = parseMoney($("#fs-entry").value) || 0;
   const installmentAmount = parseMoney($("#fs-inst").value) || 0;
   const nextDueDate = $("#fs-due").value;
+  const cost = saleCostInput();
   if (!(unitPrice > 0)) return sheetError("Informe o valor da venda.");
+  if (!cost.ok) return sheetError("Confira o custo da peça.");
   if (quantity < 1 || quantity > num(p.stock)) return sheetError(`Quantidade inválida: há ${p.stock} un.`);
   if (Number.isNaN(downPayment) || downPayment > unitPrice * quantity) return sheetError("A entrada não pode ser maior que o total.");
   if (downPayment < unitPrice * quantity && !nextDueDate) return sheetError("Informe a data do primeiro vencimento.");
@@ -1019,7 +1048,7 @@ async function saveFiadoSale(btn) {
       draft.clientId = clientId;
       draft.newClient = false;
     }
-    const res = await request("/api/admin/fiado", { method: "POST", body: JSON.stringify({ clientId, productId: p.id, quantity, unitPrice, downPayment, nextDueDate, installmentAmount, notes: $("#fs-notes").value.trim(), paymentMethod: segValue("pay") }) });
+    const res = await request("/api/admin/fiado", { method: "POST", body: JSON.stringify({ clientId, productId: p.id, quantity, unitPrice, unitCost: cost.value, downPayment, nextDueDate, installmentAmount, notes: $("#fs-notes").value.trim(), paymentMethod: segValue("pay") }) });
     await loadCatalog();
     toast("Fiado registrado");
     sheetFiado(res.fiado.id);
@@ -1384,7 +1413,7 @@ async function toggleHome(btn, id) {
   await busy(null, async () => {
     await request(`/api/admin/products/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(productPayload(p, { showOnHome: next })) });
     await loadCatalog();
-    toast(next ? "Peça na página principal" : "Peça fora da página principal");
+    toast(next ? "Peça no site" : "Peça fora do site");
   });
   if (sheetOpen() && productById(id)) btn.setAttribute("aria-checked", String(productById(id).showOnHome !== false));
 }
