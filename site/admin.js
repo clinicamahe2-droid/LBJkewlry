@@ -133,6 +133,49 @@ function guessUploadMime(file) {
   if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
   return file.type || "application/octet-stream";
 }
+// Fotos de celular passam de 5 MB e às vezes vêm em HEIC: reduz para até 1600 px em JPG antes de enviar.
+const PHOTO_MAX_SIDE = 1600;
+const PHOTO_KEEP_BYTES = 1.5 * 1024 * 1024;
+async function decodeImage(file) {
+  if (window.createImageBitmap) {
+    try { return await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { /* tenta pelo <img> */ }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+async function preparePhoto(file, { maxSide = PHOTO_MAX_SIDE } = {}) {
+  const type = guessUploadMime(file);
+  const webReady = /^image\/(jpeg|png|webp)$/.test(type);
+  if (webReady && file.size <= PHOTO_KEEP_BYTES) return file;
+  let image;
+  try { image = await decodeImage(file); } catch { image = null; }
+  const w = image?.width || image?.naturalWidth || 0;
+  const h = image?.height || image?.naturalHeight || 0;
+  if (!w || !h) {
+    if (webReady && file.size <= 5 * 1024 * 1024) return file;
+    throw new Error(`Não consegui abrir a foto ${file.name || ""}. Envie em JPG ou PNG.`);
+  }
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  image.close?.();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+  if (!blob) throw new Error("Não consegui preparar a foto. Tente outra.");
+  const name = String(file.name || "foto").replace(/\.[^.]+$/, "") + ".jpg";
+  return new File([blob], name, { type: "image/jpeg" });
+}
 const fileSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
 
 // Envia direto para o Storage com URL assinada; sem Storage, usa o envio pelo servidor.
@@ -780,9 +823,10 @@ function sheetEditProduct(id) {
     <div class="field">
       <div class="ph-head"><span class="field-label">Fotos na loja</span><span class="hint" id="ph-count"></span></div>
       <div class="slots" id="slots"></div>
-      <label class="upload" for="ph-input"><span class="ic">${icon("camera")}</span><span><b>${p ? "Adicionar ou trocar fotos" : "Comece pelas fotos"}</b><small>Câmera ou galeria · JPG, PNG ou WEBP até 5 MB</small></span></label>
-      <input class="vh" type="file" id="ph-input" accept="image/jpeg,image/png,image/webp" multiple>
-      <p class="hint">A página da peça mostra as fotos nesta ordem (seta ‹ muda a posição). A estrela escolhe a capa do cartão na vitrine.</p>
+      <label class="upload" for="ph-input" id="ph-add"></label>
+      <input class="vh" type="file" id="ph-input" accept="image/*" multiple>
+      <input class="vh" type="file" id="ph-replace" accept="image/*">
+      <p class="hint">Toque numa foto para trocar. A página da peça mostra as fotos nesta ordem (seta ‹ muda a posição) e a estrela escolhe a capa do cartão na vitrine.</p>
     </div>
     <label class="field"><span class="field-label">Nome da peça</span><input class="input" id="ed-name" value="${esc(p?.name || "")}" placeholder="Ex.: Pulseira cartier 4,5 g" maxlength="120"></label>
     <div class="field"><span class="field-label">Categoria</span><div class="chips chips--wrap" data-pick="categorySlug">${CATEGORIES.map((c) => `<button class="chip" type="button" data-pick-value="${c.slug}" aria-pressed="${draft.categorySlug === c.slug}">${c.label}</button>`).join("")}</div></div>
@@ -807,6 +851,7 @@ function sheetEditProduct(id) {
   $("#ed-price").addEventListener("input", updateMargin);
   $("#ed-cost").addEventListener("input", updateMargin);
   $("#ph-input").addEventListener("change", onPhotoFiles);
+  $("#ph-replace").addEventListener("change", onReplacePhoto);
 }
 function updateMargin() {
   const price = parseMoney($("#ed-price")?.value);
@@ -822,25 +867,28 @@ function renderSlots() {
   const filled = ph.map((src, k) => {
     const [n] = PHOTO_SLOTS[k] || [`Foto ${k + 1}`];
     const isCover = src === draft.cover;
-    return `<figure class="slot${isCover ? " cover" : ""}"><img src="${esc(src)}" alt="${n}"><figcaption><b>${n}</b><small>${isCover ? "Capa da vitrine" : k === 0 ? "1ª da página" : `${k + 1}ª foto`}</small></figcaption><span class="slot-acts">${k ? `<button type="button" data-ph-left="${k}" aria-label="Mover para a esquerda" title="Mover para a esquerda">${icon("back", "i-xs")}</button>` : ""}${isCover ? "" : `<button type="button" data-ph-cover="${k}" aria-label="Usar como capa da vitrine" title="Usar como capa da vitrine">${icon("star", "i-xs")}</button>`}<button type="button" data-ph-remove="${k}" aria-label="Remover foto" title="Remover">${icon("x", "i-xs")}</button></span></figure>`;
+    if (draft.replacing === src) return `<div class="slot busy">Trocando…</div>`;
+    return `<figure class="slot${isCover ? " cover" : ""}"><img src="${esc(src)}" alt="${n}"><button class="slot-swap" type="button" data-ph-replace="${k}" aria-label="Trocar a foto ${n}"><span>Trocar</span></button><figcaption><b>${n}</b><small>${isCover ? "Capa da vitrine" : k === 0 ? "1ª da página" : `${k + 1}ª foto`}</small></figcaption><span class="slot-acts">${k ? `<button type="button" data-ph-left="${k}" aria-label="Mover para a esquerda" title="Mover para a esquerda">${icon("back", "i-xs")}</button>` : ""}${isCover ? "" : `<button type="button" data-ph-cover="${k}" aria-label="Usar como capa da vitrine" title="Usar como capa da vitrine">${icon("star", "i-xs")}</button>`}<button type="button" data-ph-remove="${k}" aria-label="Remover foto" title="Remover">${icon("x", "i-xs")}</button></span></figure>`;
   });
   const busySlots = Array.from({ length: draft.uploading }, () => `<div class="slot busy">Enviando…</div>`);
   const empty = PHOTO_SLOTS.slice(ph.length + draft.uploading).map(([n, d]) => `<label class="slot empty" for="ph-input">${icon("camera")}<b>${n}</b><small>${d} · adicionar</small></label>`);
   $("#slots").innerHTML = filled.concat(busySlots, empty).join("");
   $("#ph-count").textContent = `${ph.length} ${ph.length === 1 ? "foto" : "fotos"}`;
+  const full = ph.length + draft.uploading >= PHOTO_SLOTS.length;
+  $("#ph-add").innerHTML = `<span class="ic">${icon("camera")}</span><span><b>${!ph.length ? "Comece pelas fotos" : full ? "Adicionar mais fotos" : "Adicionar fotos"}</b><small>${full ? "Para trocar, toque na foto acima" : "Câmera ou galeria · fotos grandes são reduzidas"}</small></span>`;
 }
 async function onPhotoFiles(event) {
   const files = [...event.target.files];
   event.target.value = "";
-  const valid = files.filter((f) => /image\/(jpeg|png|webp)/.test(guessUploadMime(f)));
-  if (valid.length < files.length) sheetError("Algumas fotos foram ignoradas: envie JPG, PNG ou WEBP.");
+  const valid = files.filter((f) => /^image\//.test(guessUploadMime(f)) || /\.(heic|heif)$/i.test(f.name || ""));
+  if (valid.length < files.length) sheetError("Alguns arquivos foram ignorados: envie fotos.");
+  else sheetError("");
   const d = draft;
   for (const file of valid) {
-    if (file.size > 5 * 1024 * 1024) { sheetError(`A foto ${file.name} tem ${fileSize(file.size)}. O máximo é 5 MB.`); continue; }
     d.uploading += 1;
     renderSlots();
     try {
-      const up = await uploadFile(file);
+      const up = await uploadFile(await preparePhoto(file));
       d.photos.push(up.url);
     } catch (error) {
       sheetError(error.message);
@@ -848,6 +896,35 @@ async function onPhotoFiles(event) {
       d.uploading -= 1;
       if (draft === d) renderSlots();
     }
+  }
+}
+function pickReplacement(k) {
+  draft.replaceSrc = draft.photos[k];
+  $("#ph-replace").click();
+}
+async function onReplacePhoto(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  const d = draft;
+  const oldSrc = d?.replaceSrc;
+  if (!file || !oldSrc) return;
+  sheetError("");
+  d.replacing = oldSrc;
+  d.uploading += 1;
+  renderSlots();
+  try {
+    const up = await uploadFile(await preparePhoto(file));
+    const k = d.photos.indexOf(oldSrc);
+    if (k === -1) d.photos.push(up.url);
+    else d.photos[k] = up.url;
+    if (d.cover === oldSrc) d.cover = up.url;
+    if (draft === d) toast("Foto trocada. Toque em Salvar para publicar.");
+  } catch (error) {
+    sheetError(error.message);
+  } finally {
+    d.uploading -= 1;
+    d.replacing = null;
+    if (draft === d) renderSlots();
   }
 }
 async function saveProduct(btn) {
@@ -1224,8 +1301,8 @@ function sheetSlide(k) {
   const n = catalog.banners.length;
   openSheet(isNew ? "Novo slide" : `Slide ${k + 1} de ${n}`, `
     <div class="field"><span class="field-label">Como aparece na loja</span><div id="slide-prev"></div></div>
-    <label class="upload" for="sl-file"><span class="ic">${icon("camera")}</span><span><b id="sl-up-label">${isNew ? "Escolher foto ou vídeo" : "Trocar foto ou vídeo"}</b><small>Foto JPG, PNG ou WEBP · vídeo MP4 até 50 MB</small></span></label>
-    <input class="vh" type="file" id="sl-file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
+    <label class="upload" for="sl-file"><span class="ic">${icon("camera")}</span><span><b id="sl-up-label">${isNew ? "Escolher foto ou vídeo" : "Trocar foto ou vídeo"}</b><small>Foto da galeria ou câmera · vídeo MP4 até 50 MB</small></span></label>
+    <input class="vh" type="file" id="sl-file" accept="image/*,video/mp4,video/webm">
     <label class="field"><span class="field-label">Texto sobre o banner</span><input class="input" id="sl-title" value="${esc(b.title || "")}" placeholder="Ex.: Novidades da temporada" maxlength="60"><span class="hint">Opcional. Aparece em letras grandes sobre a foto.</span></label>
     <label class="field"><span class="field-label">Descrição da imagem</span><input class="input" id="sl-alt" value="${esc(b.alt && b.alt !== "Banner" && b.alt !== b.title ? b.alt : "")}" placeholder="Ex.: Pulseira gourmet no pulso"><span class="hint">Lida por leitores de tela e pelo Google.</span></label>
     <details class="more"><summary>Colar link do arquivo</summary><div class="more-body"><label class="field"><span class="field-label">Link da foto ou do vídeo</span><input class="input" id="sl-url" value="${esc(b.type === "video" ? b.video : b.image)}" placeholder="https://… ou assets/uploads/arquivo.mp4"></label><p class="hint">Use se o vídeo for grande demais para enviar. Termine em .mp4 para vídeo.</p></div></details>
@@ -1252,7 +1329,8 @@ function sheetSlide(k) {
     $("#sl-up-label").textContent = `Enviando ${fileSize(file.size)}…`;
     sheetError("");
     try {
-      const up = await uploadFile(file, { banner: true });
+      const isImage = /^image\//.test(guessUploadMime(file)) || /\.(heic|heif)$/i.test(file.name || "");
+      const up = await uploadFile(isImage ? await preparePhoto(file, { maxSide: 2200 }) : file, { banner: true });
       Object.assign(d, up.mediaType === "video" ? { type: "video", video: up.url, image: "" } : { type: "image", image: up.url, video: "" });
       if (draft === d) { paint(); $("#sl-url").value = up.url; }
     } catch (error) {
@@ -1363,8 +1441,8 @@ function sheetPopup() {
   draft = { kind: "popup", enabled: pp.enabled !== false, image: pp.image || "", couponCode: pp.couponCode || "", sellerPhone: pp.sellerPhone || "", headline: pp.headline || "", instruction: pp.instruction || "" };
   openSheet("Pop-up do cupom", `
     <div class="field"><span class="field-label">Como aparece na loja</span><div id="pop-prev"></div></div>
-    <label class="upload" for="pp-file"><span class="ic">${icon("camera")}</span><span><b id="pp-up-label">Trocar imagem do pop-up</b><small>JPG, PNG ou WEBP</small></span></label>
-    <input class="vh" type="file" id="pp-file" accept="image/jpeg,image/png,image/webp">
+    <label class="upload" for="pp-file"><span class="ic">${icon("camera")}</span><span><b id="pp-up-label">Trocar imagem do pop-up</b><small>Foto da galeria ou câmera</small></span></label>
+    <input class="vh" type="file" id="pp-file" accept="image/*">
     <label class="field"><span class="field-label">Título</span><input class="input" id="pp-head" value="${esc(draft.headline)}" placeholder="Ganhe seu cupom de desconto"></label>
     <div class="two"><label class="field"><span class="field-label">Código do cupom</span><input class="input" id="pp-code" value="${esc(draft.couponCode)}" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600" placeholder="OUTUBRO10"></label><label class="field"><span class="field-label">WhatsApp do vendedor</span><input class="input" id="pp-phone" inputmode="tel" value="${esc(fmtPhone(draft.sellerPhone))}" placeholder="(48) 99999-9999"></label></div>
     <label class="field"><span class="field-label">Mensagem depois de liberar o cupom</span><textarea class="input" id="pp-ins" placeholder="Ao chamar no WhatsApp do vendedor, mencione o cupom.">${esc(draft.instruction)}</textarea></label>
@@ -1381,7 +1459,7 @@ function sheetPopup() {
     const d = draft;
     $("#pp-up-label").textContent = "Enviando…";
     try {
-      const up = await uploadFile(file);
+      const up = await uploadFile(await preparePhoto(file));
       d.image = up.url;
       if (draft === d) { $("#pp-url").value = up.url; paint(); }
     } catch (error) {
@@ -1532,6 +1610,7 @@ document.addEventListener("click", (event) => {
   if (d.segValue !== undefined && t.closest("[data-seg]")) { $$("button", t.closest("[data-seg]")).forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return; }
   if (d.pickValue && t.closest("[data-pick]")) { const box = t.closest("[data-pick]"); draft[box.dataset.pick] = d.pickValue; $$("button", box).forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return; }
   if (d.draftSwitch) { draft[d.draftSwitch] = !draft[d.draftSwitch]; t.setAttribute("aria-checked", String(draft[d.draftSwitch])); return; }
+  if (d.phReplace !== undefined && t.hasAttribute("data-ph-replace")) { pickReplacement(Number(d.phReplace)); return; }
   if (d.phRemove !== undefined && t.hasAttribute("data-ph-remove")) { draft.photos.splice(Number(d.phRemove), 1); renderSlots(); return; }
   if (d.phCover) { draft.cover = draft.photos[Number(d.phCover)]; renderSlots(); toast("Capa da vitrine definida"); return; }
   if (d.phLeft) { const k = Number(d.phLeft); [draft.photos[k - 1], draft.photos[k]] = [draft.photos[k], draft.photos[k - 1]]; renderSlots(); return; }
