@@ -178,6 +178,8 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .chip small { opacity: .6; margin-left: 4px; }
 .chip.warn { border-color: transparent; background: var(--citrino-soft); color: var(--citrino); }
 .chip.warn[aria-pressed="true"] { background: var(--citrino); color: var(--surface); }
+.reorg-row { align-items: flex-start; }
+.reorg-row .chips { margin-top: 8px; }
 .summary-line { font-size: 12px; color: var(--muted); margin: -8px 4px -6px; display: flex; gap: 4px 6px; flex-wrap: wrap; }
 .summary-line b { color: var(--ink-2); font-weight: 600; }
 

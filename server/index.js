@@ -351,6 +351,14 @@ async function createApp() {
     }
   });
 
+  app.post("/api/admin/products/category", requireAdmin, async (req, res) => {
+    try {
+      res.json(await store.moveProductsCategory(req.body?.moves));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
       res.json(await store.updateProduct(req.params.id, req.body || {}));

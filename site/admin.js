@@ -6,7 +6,14 @@ const CATEGORIES = [
   { slug: "brincos", label: "Brincos" },
   { slug: "aneis", label: "Anéis" }
 ];
-const PHOTO_SLOTS = [["Peça", "1ª foto"], ["Mostruário", "2ª foto"], ["Em uso", "3ª foto"]];
+// Palavras do nome que dizem a categoria; vale a que aparece primeiro ("Pulseira com pingente anel" → pulseiras).
+const CATEGORY_WORDS = [
+  [/brinco|argola/, "brincos"],
+  [/\banel\b|\baneis\b|alianca/, "aneis"],
+  [/pulseir|relogio|tornozeleir/, "pulseiras"],
+  [/corrente|colar|gargantilh/, "correntes"]
+];
+const PHOTO_SLOTS =[["Peça", "1ª foto"], ["Mostruário", "2ª foto"], ["Em uso", "3ª foto"]];
 const PAYMENT_METHODS = ["PIX", "Dinheiro", "Cartão"];
 const MAX_BANNER_VIDEO_BYTES = 50 * 1024 * 1024;
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -216,6 +223,16 @@ const coverOf = (p) => p?.image || photosOf(p)[0] || "";
 const hasSalePrice = (p) => num(p.priceList) > num(p.priceMax);
 const isPromo = (p) => p.badge === "sale" || hasSalePrice(p);
 const isAvailable = (p) => num(p.stock) > 0;
+function suggestedCategory(p) {
+  const text = String(p.name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  let best = null;
+  CATEGORY_WORDS.forEach(([re, slug]) => {
+    const at = text.search(re);
+    if (at !== -1 && (!best || at < best.at)) best = { at, slug };
+  });
+  return best?.slug || "";
+}
+const misplaced = () => catalog.products.filter((p) => { const s = suggestedCategory(p); return s && s !== p.categorySlug; });
 const isOnStore = (p) => isAvailable(p) && p.active !== false;
 const missingPhotos = (p) => PHOTO_SLOTS.slice(photosOf(p).length, 2).map(([n]) => n);
 const needsPhoto = (p) => isOnStore(p) && photosOf(p).length < 2;
@@ -414,9 +431,11 @@ function renderPecas() {
   const filters = [["all", "Todas", pool.length], ...CATEGORIES.map((c) => [c.slug, c.label, pool.filter((p) => p.categorySlug === c.slug).length])];
   const extra = [["promo", "Promoção", pool.filter(isPromo).length], ["home", "No site", pool.filter((p) => p.showOnHome !== false).length], ["inactive", "Inativas", pool.filter((p) => p.active === false).length]];
   const fotos = pool.filter((p) => photosOf(p).length < 2 && isAvailable(p) && p.active !== false).length;
-  $("#pecas-chips").innerHTML = filters.filter(([id, , n]) => id === "all" || n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
+  const wrong = misplaced().length;
+  $("#pecas-chips").innerHTML = filters.map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
     + extra.filter(([, , n]) => n).map(([id, label, n]) => `<button class="chip" type="button" data-pecas-filter="${id}" aria-pressed="${st.filter === id}">${label}<small>${n}</small></button>`).join("")
-    + (fotos ? `<button class="chip warn" type="button" data-pecas-filter="fotos" aria-pressed="${st.filter === "fotos"}">Falta foto<small>${fotos}</small></button>` : "");
+    + (fotos ? `<button class="chip warn" type="button" data-pecas-filter="fotos" aria-pressed="${st.filter === "fotos"}">Falta foto<small>${fotos}</small></button>` : "")
+    + (wrong ? `<button class="chip warn" type="button" data-open="reorg">Categoria errada<small>${wrong}</small></button>` : "");
   const q = st.q.trim().toLowerCase();
   const list = pool.filter((p) => {
     const f = st.filter;
@@ -758,7 +777,38 @@ function sheetNew() {
     <button class="menu-item" type="button" data-open="receive"><span class="ic">${icon("coin")}</span><span><b>Receber abatimento</b><small>Escolha o fiado e o valor</small></span></button>
     <button class="menu-item" type="button" data-new-product><span class="ic">${icon("camera")}</span><span><b>Nova peça</b><small>Começa pelas fotos da vitrine</small></span></button>
     <button class="menu-item" type="button" data-open="client"><span class="ic">${icon("user-plus")}</span><span><b>Novo cliente</b><small>Nome, telefone e endereço</small></span></button>
+    <button class="menu-item" type="button" data-open="reorg"><span class="ic">${icon("search")}</span><span><b>Reorganizar categorias</b><small>Mover peças para Brincos, Anéis…</small></span></button>
   </div>`);
+}
+
+// ---- reorganizar categorias ----
+// Lista as peças com categoria diferente da que o nome sugere e as demais pulseiras.
+// Só a categoria muda; o resto da peça fica igual.
+function sheetReorg() {
+  const wrong = misplaced().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const rest = catalog.products.filter((p) => p.categorySlug === "pulseiras" && !wrong.includes(p)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  draft = {};
+  wrong.forEach((p) => { draft[`cat:${p.id}`] = suggestedCategory(p); });
+  rest.forEach((p) => { draft[`cat:${p.id}`] = p.categorySlug; });
+  const row = (p) => `<div class="rowi rowi--plain reorg-row">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">Hoje em ${esc(p.category || "")} · ${p.stock} un.</span>
+    <span class="chips chips--wrap" data-pick="cat:${esc(p.id)}">${CATEGORIES.map((c) => `<button class="chip" type="button" data-pick-value="${c.slug}" aria-pressed="${draft[`cat:${p.id}`] === c.slug}">${c.label}</button>`).join("")}</span></span></div>`;
+  openSheet("Reorganizar categorias", `<div class="stack">
+    <p class="hint">Escolha a categoria de cada peça. Só a categoria muda: nome, fotos, preço e estoque ficam como estão.</p>
+    ${wrong.length ? `<div><span class="label">Nome sugere outra categoria · ${wrong.length}</span><div class="group">${wrong.map(row).join("")}</div></div>` : `<p class="empty"><b>Tudo no lugar</b>Nenhuma peça com categoria diferente do nome.</p>`}
+    ${rest.length ? `<div><span class="label">Demais pulseiras · ${rest.length}</span><div class="group">${rest.map(row).join("")}</div></div>` : ""}
+  </div>`, `<button class="btn btn--ghost" type="button" data-close>Cancelar</button><button class="btn btn--primary" type="button" data-save-reorg>Mover peças</button>`);
+}
+async function saveReorg(btn) {
+  const moves = Object.entries(draft || {})
+    .map(([key, categorySlug]) => ({ id: key.slice(4), categorySlug }))
+    .filter((m) => productById(m.id) && productById(m.id).categorySlug !== m.categorySlug);
+  if (!moves.length) return sheetError("Nenhuma categoria foi trocada.");
+  await busy(btn, async () => {
+    await request("/api/admin/products/category", { method: "POST", body: JSON.stringify({ moves }) });
+    await loadCatalog();
+    closeSheet();
+    toast(`${plural(moves.length, "peça movida", "peças movidas")}`);
+  }, "Movendo…");
 }
 
 // ---- peça ----
@@ -1571,6 +1621,7 @@ document.addEventListener("click", (event) => {
   if (d.open === "fiado-sale") return sheetFiadoSale("");
   if (d.open === "receive") return sheetReceive();
   if (d.open === "client") return sheetClient("");
+  if (d.open === "reorg") return sheetReorg();
   if (t.hasAttribute("data-new-product")) return sheetEditProduct("");
   if (t.hasAttribute("data-search-shortcut")) { closeSheet(); go("pecas"); setTimeout(() => $("#q-pecas").focus(), 60); return; }
 
@@ -1620,6 +1671,7 @@ document.addEventListener("click", (event) => {
 
   // salvar
   if (t.hasAttribute("data-save-product")) return saveProduct(t);
+  if (t.hasAttribute("data-save-reorg")) return saveReorg(t);
   if (d.saveRestock) return restock(t, d.saveRestock);
   if (t.hasAttribute("data-save-sale")) return saveSale(t);
   if (t.hasAttribute("data-save-fiado-sale")) return saveFiadoSale(t);

@@ -409,6 +409,34 @@ async function updateProduct(productId, input) {
   return product;
 }
 
+// Troca só a categoria das peças: nome, fotos, preço, estoque e coleção ficam como estão.
+async function moveProductsCategory(moves) {
+  if (!Array.isArray(moves) || !moves.length) {
+    throw new Error("Escolha ao menos uma peça para mover.");
+  }
+  const labels = { correntes: "Correntes", brincos: "Brincos", pulseiras: "Pulseiras", aneis: "Anéis" };
+  const catalog = await loadCatalog();
+  const moved = [];
+  for (const move of moves) {
+    const categorySlug = stripTags(move?.categorySlug);
+    if (!CATEGORIES.has(categorySlug)) {
+      throw new Error("Categoria inválida.");
+    }
+    const product = catalog.products.find((item) => item.id === move?.id);
+    if (!product) {
+      throw new Error("Produto não encontrado.");
+    }
+    if (product.categorySlug === categorySlug) continue;
+    product.categorySlug = categorySlug;
+    product.category = labels[categorySlug];
+    moved.push(product.id);
+  }
+  if (moved.length) {
+    await saveCatalog(catalog);
+  }
+  return { moved };
+}
+
 async function deleteProduct(productId) {
   const catalog = await loadCatalog();
   const next = catalog.products.filter((item) => item.id !== productId);
@@ -867,6 +895,7 @@ module.exports = {
   deleteProspect: serialized(deleteProspect),
   createProduct: serialized(createProduct),
   updateProduct: serialized(updateProduct),
+  moveProductsCategory: serialized(moveProductsCategory),
   deleteProduct: serialized(deleteProduct),
   saveBanners: serialized(saveBanners),
   recordSale: serialized(recordSale),
