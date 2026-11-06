@@ -180,6 +180,8 @@ button.rowi:hover, a.rowi:hover { background: var(--raised); }
 .chip.warn[aria-pressed="true"] { background: var(--citrino); color: var(--surface); }
 .reorg-row { align-items: flex-start; }
 .reorg-row .chips { margin-top: 8px; }
+.bday-note { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--citrino-soft); color: var(--citrino); }
+.bday-note b { font-weight: 600; }
 .summary-line { font-size: 12px; color: var(--muted); margin: -8px 4px -6px; display: flex; gap: 4px 6px; flex-wrap: wrap; }
 .summary-line b { color: var(--ink-2); font-weight: 600; }
 

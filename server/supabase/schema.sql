@@ -19,7 +19,8 @@ create table if not exists products (
   details jsonb not null default '[]'::jsonb,
   cost numeric not null default 0,
   sku text default '',
-  active boolean not null default true
+  active boolean not null default true,
+  weight numeric not null default 0
 );
 
 create table if not exists banners (
@@ -38,6 +39,7 @@ create table if not exists clients (
   phone text not null,
   notes text default '',
   address text default '',
+  birth_date text default '',
   created_at timestamptz not null default now()
 );
 
@@ -129,6 +131,8 @@ alter table products add column if not exists cost numeric not null default 0;
 alter table products add column if not exists sku text default '';
 alter table products add column if not exists active boolean not null default true;
 alter table clients add column if not exists address text default '';
+alter table products add column if not exists weight numeric not null default 0;
+alter table clients add column if not exists birth_date text default '';
 alter table sales add column if not exists unit_cost numeric not null default 0;
 alter table sales add column if not exists payment_method text default '';
 alter table sales add column if not exists notes text default '';

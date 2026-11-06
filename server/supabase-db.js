@@ -28,6 +28,7 @@ function productToRow(product, columns = {}) {
   if (columns.cost) row.cost = Number(product.cost) || 0;
   if (columns.sku) row.sku = product.sku || "";
   if (columns.active) row.active = product.active !== false;
+  if (columns.weight) row.weight = Number(product.weight) || 0;
   return row;
 }
 
@@ -51,7 +52,8 @@ function productFromRow(row) {
     details: row.details || [],
     cost: row.cost != null ? Number(row.cost) : 0,
     sku: row.sku || "",
-    active: row.active !== false
+    active: row.active !== false,
+    weight: row.weight != null ? Number(row.weight) : 0
   };
 }
 
@@ -92,6 +94,7 @@ function clientToRow(client) {
 function clientToRowWithColumns(client, columns = {}) {
   const row = clientToRow(client);
   if (columns.address) row.address = client.address || "";
+  if (columns.birthDate) row.birth_date = client.birthDate || "";
   return row;
 }
 
@@ -102,6 +105,7 @@ function clientFromRow(row) {
     phone: row.phone,
     notes: row.notes || "",
     address: row.address || "",
+    birthDate: row.birth_date || "",
     createdAt: row.created_at
   };
 }
@@ -237,7 +241,8 @@ const EXTRA_FIELDS = {
   products: [
     ["cost", "productCost", (item) => Number(item.cost) || 0],
     ["sku", "productSku", (item) => item.sku || ""],
-    ["active", "productActive", (item) => item.active !== false]
+    ["active", "productActive", (item) => item.active !== false],
+    ["weight", "productWeight", (item) => Number(item.weight) || 0]
   ],
   sales: [
     ["unitCost", "saleCost", (item) => Number(item.unitCost) || 0],
@@ -249,7 +254,8 @@ const EXTRA_FIELDS = {
     ["paymentMethod", "fiadoPay", (item) => item.paymentMethod || ""]
   ],
   clients: [
-    ["address", "clientAddress", (item) => item.address || ""]
+    ["address", "clientAddress", (item) => item.address || ""],
+    ["birthDate", "clientBirth", (item) => item.birthDate || ""]
   ]
 };
 
@@ -295,27 +301,30 @@ function applyOpsExtras(catalog, extras, columns = {}) {
 const snapshots = new WeakMap();
 
 async function loadColumns() {
-  const [productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay] = await Promise.all([
+  const [productCost, productSku, productActive, productWeight, clientAddress, clientBirth, saleCost, salePay, saleNotes, fiadoCost, fiadoPay] = await Promise.all([
     hasColumn("products", "cost"),
     hasColumn("products", "sku"),
     hasColumn("products", "active"),
+    hasColumn("products", "weight"),
     hasColumn("clients", "address"),
+    hasColumn("clients", "birth_date"),
     hasColumn("sales", "unit_cost"),
     hasColumn("sales", "payment_method"),
     hasColumn("sales", "notes"),
     hasColumn("fiado", "unit_cost"),
     hasColumn("fiado", "payment_method")
   ]);
-  return { productCost, productSku, productActive, clientAddress, saleCost, salePay, saleNotes, fiadoCost, fiadoPay };
+  return { productCost, productSku, productActive, productWeight, clientAddress, clientBirth, saleCost, salePay, saleNotes, fiadoCost, fiadoPay };
 }
 
 function tableMappers(columns) {
   return [
-    ["clients", "clients", (client) => clientToRowWithColumns(client, { address: columns.clientAddress })],
+    ["clients", "clients", (client) => clientToRowWithColumns(client, { address: columns.clientAddress, birthDate: columns.clientBirth })],
     ["products", "products", (product) => productToRow(product, {
       cost: columns.productCost,
       sku: columns.productSku,
-      active: columns.productActive
+      active: columns.productActive,
+      weight: columns.productWeight
     })],
     ["banners", "banners", bannerToRow],
     ["fiado", "fiado", (entry) => fiadoToRow(entry, {

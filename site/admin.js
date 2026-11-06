@@ -247,6 +247,36 @@ function grams(name) {
   const m = String(name || "").match(/(\d+[.,]\d+|\d+)\s*(g|gr|gramas)\b/i) || String(name || "").match(/\s(\d+[.,]\d+)\s*$/);
   return m ? `${m[1].replace(".", ",")} g` : "";
 }
+// Peso cadastrado no painel; sem ele, o que o nome da peça disser.
+const weightTxt = (p) => (num(p.weight) > 0 ? `${String(num(p.weight)).replace(".", ",")} g` : grams(p.name));
+
+// Aniversário: "aaaa-mm-dd" ou "--mm-dd" (sem o ano).
+const BIRTHDAY_DAYS = 7;
+function birthInput(value) {
+  const m = String(value || "").match(/^(\d{4}|-)-?(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}${m[1] !== "-" ? `/${m[1]}` : ""}` : "";
+}
+// Dias até o próximo aniversário (0 = hoje) e a idade que a pessoa faz, se tiver o ano.
+function nextBirthday(c) {
+  const m = String(c.birthDate || "").match(/^(\d{4}|-)-?(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const today = new Date(`${localISO()}T12:00:00`);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  let year = today.getFullYear();
+  const dateIn = (y) => new Date(y, month, month === 1 && day === 29 && new Date(y, 1, 29).getMonth() !== 1 ? 28 : day, 12);
+  let next = dateIn(year);
+  if (next < today) next = dateIn(++year);
+  const days = Math.round((next - today) / 86400000);
+  return { days, date: localISO(next), age: m[1] !== "-" ? year - Number(m[1]) : null };
+}
+function upcomingBirthdays() {
+  return catalog.clients
+    .map((c) => ({ c, b: nextBirthday(c) }))
+    .filter(({ b }) => b && b.days <= BIRTHDAY_DAYS)
+    .sort((x, y) => x.b.days - y.b.days || x.c.name.localeCompare(y.c.name, "pt-BR"));
+}
+const whenTxt = (days) => (days === 0 ? "hoje" : days === 1 ? "amanhã" : `em ${days} dias`);
 
 const saleRevenue = (s) => (s.type === "fiado" ? num(s.paidAtSale) : num(s.total));
 const saleCost = (s) => (s.type === "fiado_payment" ? 0 : num(s.unitCost) * num(s.quantity || 0));
@@ -303,7 +333,7 @@ function productPayload(p, overrides = {}) {
   return {
     name: p.name, categorySlug: p.categorySlug, collection: p.collection || "", sku: p.sku || "",
     badge: p.badge || "", priceMin: num(p.priceMin), priceMax: num(p.priceMax), priceList: p.priceList ?? "",
-    cost: num(p.cost), stock: num(p.stock), stockSeen: num(p.stock), showOnHome: p.showOnHome !== false, active: p.active !== false,
+    cost: num(p.cost), weight: num(p.weight), stock: num(p.stock), stockSeen: num(p.stock), showOnHome: p.showOnHome !== false, active: p.active !== false,
     image: coverOf(p), images: photosOf(p), thickness: p.thickness || [], details: p.details || [], description: p.description || "",
     ...overrides
   };
@@ -381,10 +411,10 @@ function renderHome() {
     <button class="kpi" type="button" data-go="pecas"><span class="label">Em estoque</span><span class="v money">${units}<small style="font:500 11px var(--ui);color:var(--muted);margin-left:3px">un.</small></span></button>`;
 
   const semFoto = catalog.products.filter(needsPhoto);
-  const attn = [...overdue.slice(0, 4), ...soon.slice(0, 2)].map(rowFiado);
+  const attn = [...upcomingBirthdays().map(rowBirthday), ...overdue.slice(0, 4).map(rowFiado), ...soon.slice(0, 2).map(rowFiado)];
   if (semFoto.length) attn.push(`<button class="rowi rowi--plain" type="button" data-pecas-filter="fotos"><span class="avatar" data-s="soon">${icon("camera", "i-sm")}</span><span class="mid"><span class="name">${plural(semFoto.length, "peça na loja sem foto do mostruário", "peças na loja sem foto do mostruário")}</span><span class="meta">${semFoto.slice(0, 3).map((p) => esc(p.name)).join(", ")}${semFoto.length > 3 ? "…" : ""}</span></span>${icon("chev", "chev")}</button>`);
   if (overdue.length > 4) attn.push(`<button class="rowi rowi--plain" type="button" data-go-fiado="cobrar"><span class="avatar">+${overdue.length - 4}</span><span class="mid"><span class="name">Mais ${plural(overdue.length - 4, "vencido", "vencidos")}</span><span class="meta">Ver a fila de cobrança</span></span>${icon("chev", "chev")}</button>`);
-  $("#home-attn").innerHTML = attn.length ? attn.join("") : `<p class="empty"><b>Tudo em dia</b>Nenhum fiado vencido e as peças da loja têm fotos.</p>`;
+  $("#home-attn").innerHTML = attn.length ? attn.join("") : `<p class="empty"><b>Tudo em dia</b>Nenhum fiado vencido, nenhum aniversário nos próximos ${BIRTHDAY_DAYS} dias e as peças da loja têm fotos.</p>`;
 
   const recent = catalog.sales.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 4);
   $("#home-sales").innerHTML = recent.length ? recent.map(rowSale).join("") : `<p class="empty">Nenhuma venda registrada ainda.</p>`;
@@ -414,7 +444,7 @@ function rowProduct(p) {
   if (p.active === false) tags.push('<span class="warn">inativa</span>');
   if (needsPhoto(p)) tags.push('<span class="warn">sem mostruário</span>');
   if (hasSalePrice(p) && isAvailable(p)) tags.push(`<span class="sale-t">oferta −${Math.round((1 - num(p.priceMax) / num(p.priceList)) * 100)}%</span>`);
-  const meta = [p.category, grams(p.name), p.sku].filter(Boolean).map(esc).join(" · ") + (tags.length ? ` · ${tags.join(" · ")}` : "");
+  const meta = [p.category, weightTxt(p), p.sku].filter(Boolean).map(esc).join(" · ") + (tags.length ? ` · ${tags.join(" · ")}` : "");
   const stock = isAvailable(p) ? `<span class="pill${num(p.stock) === 1 ? "" : " green"}">${p.stock} un.</span>` : `<span class="pill">Vendida</span>`;
   return `<button class="rowi${p.active === false ? " is-muted" : ""}" type="button" data-product="${esc(p.id)}">${thumbHtml(p)}<span class="mid"><span class="name">${esc(p.name)}</span><span class="meta">${meta}</span></span><span class="end">${money(p.priceMin)}${stock}</span></button>`;
 }
@@ -586,6 +616,10 @@ function rowFiado(e) {
     : tone === "paid" ? `<span class="pill green">Quitado</span>` : `<span class="pill">${e.nextDueDate ? fmtDate(e.nextDueDate) : "sem data"}</span>`;
   const meta = [e.productName, e.status !== "paid" && e.nextDueDate ? `${e.status === "overdue" ? "venceu" : "vence"} ${fmtDate(e.nextDueDate)}` : ""].filter(Boolean).map(esc).join(" · ");
   return `<button class="rowi rowi--plain" type="button" data-fiado="${esc(e.id)}"><span class="avatar" data-s="${tone}">${esc(initials(c.name))}</span><span class="mid"><span class="name">${esc(c.name)}</span><span class="meta">${meta}</span></span><span class="end">${money(e.status === "paid" ? e.total : e.balance)}${pill}</span></button>`;
+}
+function rowBirthday({ c, b }) {
+  const meta = [`${fmtDate(b.date)} · ${whenTxt(b.days)}`, b.age ? `faz ${b.age} anos` : "", fmtPhone(c.phone)].filter(Boolean).map(esc).join(" · ");
+  return `<button class="rowi rowi--plain" type="button" data-client="${esc(c.id)}"><span class="avatar" data-s="${b.days === 0 ? "soon" : ""}">${icon("star", "i-sm")}</span><span class="mid"><span class="name">Aniversário de ${esc(c.name)}</span><span class="meta">${meta}</span></span>${icon("chev", "chev")}</button>`;
 }
 function rowClient(c) {
   const l = clientLedger(c.id);
@@ -821,6 +855,7 @@ function sheetProduct(id) {
   const sold = !isAvailable(p);
   const sales = salesOfProduct(p);
   const pills = [`<span class="pill">${esc(p.category || "")}</span>`];
+  if (num(p.weight) > 0) pills.push(`<span class="pill">${esc(weightTxt(p))}</span>`);
   if (sold) pills.push('<span class="pill amber">Vendida · fora da loja</span>');
   else pills.push(p.showOnHome !== false ? '<span class="pill green">No site</span>' : '<span class="pill">Fora do site</span>');
   if (p.active === false) pills.push('<span class="pill amber">Inativa</span>');
@@ -883,6 +918,7 @@ function sheetEditProduct(id) {
     <div class="two"><label class="field"><span class="field-label">Preço</span><input class="input money-in" id="ed-price" inputmode="decimal" value="${moneyInput(p?.priceMin)}" placeholder="0"></label><label class="field"><span class="field-label">Custo</span><input class="input money-in" id="ed-cost" inputmode="decimal" value="${moneyInput(p?.cost)}" placeholder="0"></label></div>
     <p class="hint" id="ed-margin"></p>
     <div class="two"><div class="field"><span class="field-label">Estoque</span>${stepper("ed-stock", p ? num(p.stock) : 1, 0, 999)}</div><label class="field"><span class="field-label">Código</span><input class="input" id="ed-sku" value="${esc(p?.sku || "")}" placeholder="SKU"></label></div>
+    <label class="field"><span class="field-label">Peso em gramas</span><input class="input" id="ed-weight" inputmode="decimal" value="${num(p?.weight) > 0 ? String(num(p.weight)).replace(".", ",") : ""}" placeholder="${esc(grams(p?.name) || "Ex.: 4,5")}"><span class="hint">Só aparece aqui no painel. Não vai para a loja.</span></label>
     <div class="field"><span class="field-label">Selo na foto</span>${segHtml("badge", [["", "Nenhum"], ["sale", "Sale"], ["new", "Lançamento"]], draft.badge)}</div>
     <div class="switch-row"><span><b>Mostrar no site</b><small>A peça aparece na loja lbgold18k.com.br</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.home}" data-draft-switch="home" aria-label="Mostrar no site"></button></div>
     <div class="switch-row"><span><b>Peça ativa</b><small>Desligada, some da loja sem apagar</small></span><button class="switch" type="button" role="switch" aria-checked="${draft.active}" data-draft-switch="active" aria-label="Peça ativa"></button></div>
@@ -999,6 +1035,9 @@ async function saveProduct(btn) {
     image: d.photos.includes(d.cover) ? d.cover : d.photos[0], images: d.photos, thickness: variants.length ? variants : ["Único"],
     details: details.length ? details : (existing?.details || []), description: $("#ed-desc").value.trim()
   };
+  const weight = $("#ed-weight").value.trim() ? Number($("#ed-weight").value.trim().replace(/\s*g(ramas)?$/i, "").replace(",", ".")) : 0;
+  if (!(weight >= 0)) return sheetError("Confira o peso: use números, como 4,5.");
+  payload.weight = weight;
   if (existing) payload.stockSeen = d.stockSeen;
   await busy(btn, async () => {
     const saved = await request(existing ? `/api/admin/products/${encodeURIComponent(existing.id)}` : "/api/admin/products", { method: existing ? "PUT" : "POST", body: JSON.stringify(payload) });
@@ -1275,11 +1314,15 @@ function sheetClient(id = "") {
   const c = catalog.clients.find((x) => x.id === id);
   const l = c ? clientLedger(c.id) : null;
   const wa = c ? whatsAppLink(c.phone, l.balance > 0 ? `Olá ${c.name.split(" ")[0]}, tudo bem?\nSeu saldo em aberto na LB jewelry é ${moneyTxt(l.balance)}.` : `Olá ${c.name.split(" ")[0]}, tudo bem?`) : "";
+  const next = c ? nextBirthday(c) : null;
+  const bday = next && next.days <= BIRTHDAY_DAYS ? next : null;
+  const bdayWa = bday ? whatsAppLink(c.phone, `Olá ${c.name.split(" ")[0]}! ${bday.days === 0 ? "Feliz aniversário" : "Seu aniversário está chegando"} 🎉 A LB jewelry deseja muitas felicidades!`) : "";
   openSheet(c ? c.name : "Novo cliente", `
     ${c ? `<div class="facts"><div><span class="label">Saldo</span><b style="color:${l.overdue ? "var(--granada)" : "var(--ink)"}">${moneyTxt(l.balance)}</b></div><div><span class="label">Fiados</span><b>${l.entries.length}</b></div><div><span class="label">Próximo</span><b>${l.nextDue ? fmtDate(l.nextDue) : "—"}</b></div></div>
+    ${bday ? `<div class="bday-note"><b>Aniversário ${whenTxt(bday.days)}${bday.age ? ` · faz ${bday.age} anos` : ""}</b>${bdayWa ? `<a class="btn btn--wa" href="${esc(bdayWa)}" target="_blank" rel="noopener">${icon("chat", "i-sm")}Mandar parabéns</a>` : ""}</div>` : ""}
     ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "i-sm")}Chamar no WhatsApp</a>` : ""}` : ""}
     <label class="field"><span class="field-label">Nome</span><input class="input" id="cl-name" value="${esc(c?.name || "")}" placeholder="Nome completo"></label>
-    <label class="field"><span class="field-label">Telefone</span><input class="input" id="cl-phone" inputmode="tel" value="${esc(c?.phone || "")}" placeholder="(48) 99999-9999"></label>
+    <div class="two"><label class="field"><span class="field-label">Telefone</span><input class="input" id="cl-phone" inputmode="tel" value="${esc(c?.phone || "")}" placeholder="(48) 99999-9999"></label><label class="field"><span class="field-label">Data de nascimento</span><input class="input" id="cl-birth" inputmode="numeric" value="${esc(birthInput(c?.birthDate))}" placeholder="dd/mm/aaaa" maxlength="10"></label></div>
     <label class="field"><span class="field-label">Endereço</span><input class="input" id="cl-address" value="${esc(c?.address || "")}" placeholder="Rua, bairro, cidade"></label>
     <label class="field"><span class="field-label">Anotações</span><textarea class="input" id="cl-notes" placeholder="Preferências, combinados de pagamento">${esc(c?.notes || "")}</textarea></label>
     ${c && l.entries.length ? `<div class="field"><span class="field-label">Fiados</span><div class="group">${l.entries.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(rowFiado).join("")}</div></div>` : ""}
@@ -1294,7 +1337,7 @@ async function saveClient(btn, id) {
   if (phoneDigits(phone).length < 10) return sheetError("Informe o telefone com DDD.");
   const existing = catalog.clients.find((x) => x.id === id);
   await busy(btn, async () => {
-    const saved = await request(existing ? `/api/admin/clients/${encodeURIComponent(id)}` : "/api/admin/clients", { method: existing ? "PUT" : "POST", body: JSON.stringify({ name, phone, address: $("#cl-address").value.trim(), notes: $("#cl-notes").value.trim(), createdAt: existing?.createdAt }) });
+    const saved = await request(existing ? `/api/admin/clients/${encodeURIComponent(id)}` : "/api/admin/clients", { method: existing ? "PUT" : "POST", body: JSON.stringify({ name, phone, birthDate: $("#cl-birth").value.trim(), address: $("#cl-address").value.trim(), notes: $("#cl-notes").value.trim(), createdAt: existing?.createdAt }) });
     await loadCatalog();
     toast(existing ? "Cliente salvo" : "Cliente cadastrado");
     sheetClient(saved.id);

@@ -353,6 +353,7 @@ function normalizeProduct(input, existingId) {
     priceMax,
     priceList: priceList > priceMax ? priceList : undefined,
     cost,
+    weight: Math.max(0, Math.round(toNumber(input.weight) * 100) / 100),
     stock,
     showOnHome,
     active,
@@ -365,7 +366,8 @@ function normalizeProduct(input, existingId) {
 }
 
 function toPublicProduct(product) {
-  const { cost, sku, active, ...publicProduct } = product;
+  // Custo, código e peso são dados internos do painel: não vão para a vitrine.
+  const { cost, sku, active, weight, ...publicProduct } = product;
   return publicProduct;
 }
 
@@ -478,6 +480,27 @@ async function publicCatalog() {
   };
 }
 
+// Aceita "dd/mm", "dd/mm/aaaa" ou "aaaa-mm-dd". Sem o ano, guarda "--mm-dd".
+function normalizeBirthDate(value) {
+  const text = stripTags(value);
+  if (!text) return "";
+  const invalid = "Data de nascimento inválida. Use dd/mm ou dd/mm/aaaa.";
+  let year = "";
+  let month;
+  let day;
+  let m;
+  if ((m = text.match(/^(\d{4})-(\d{2})-(\d{2})$/))) [, year, month, day] = m;
+  else if ((m = text.match(/^--(\d{2})-(\d{2})$/))) [, month, day] = m;
+  else if ((m = text.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2}|\d{4}))?$/))) {
+    [, day, month, year = ""] = m;
+    if (year.length === 2) year = (Number(year) > new Date().getFullYear() % 100 ? "19" : "20") + year;
+  } else throw new Error(invalid);
+  const maxDay = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Number(month) - 1];
+  if (!maxDay || Number(day) < 1 || Number(day) > maxDay) throw new Error(invalid);
+  const monthDay = `${String(Number(month)).padStart(2, "0")}-${String(Number(day)).padStart(2, "0")}`;
+  return year ? `${year}-${monthDay}` : `--${monthDay}`;
+}
+
 function normalizeClient(input, existingId) {
   const name = stripTags(input.name);
   if (!name) {
@@ -492,6 +515,7 @@ function normalizeClient(input, existingId) {
     name,
     phone,
     address: stripTags(input.address),
+    birthDate: normalizeBirthDate(input.birthDate),
     notes: stripTags(input.notes),
     createdAt: existingId
       ? stripTags(input.createdAt) || new Date().toISOString()
